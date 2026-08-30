@@ -274,8 +274,9 @@ export class KiroExecutor extends BaseExecutor {
    * The Kiro IDE gateway (runtime.*.kiro.dev) expects Kiro OIDC/social tokens
    * and rejects TokenType=API_KEY. External IdP enterprise tokens instead
    * use the CodeWhisperer surface, with the `TokenType: EXTERNAL_IDP` header.
-   * Other OAuth methods keep the default order (kiro.dev first) since their
-   * tokens are what that gateway accepts.
+   * Builder ID tokens are AWS SSO access tokens too — the kiro.dev gateway
+   * rejects them with terminal 400 {REQUEST_BODY_INVALID}, so they must hit
+   * the CodeWhisperer *.amazonaws.com surface.
    */
   getOrderedBaseUrls(credentials) {
     const baseUrls = this.getBaseUrls();
@@ -286,7 +287,10 @@ export class KiroExecutor extends BaseExecutor {
     // *.amazonaws.com surface, and in the region the token was minted in
     // (the baseUrls are hardcoded us-east-1).
     const isCodeWhispererSurface =
-      authMethod === "api_key" || authMethod === "external_idp" || authMethod === "idc";
+      authMethod === "api_key" ||
+      authMethod === "external_idp" ||
+      authMethod === "idc" ||
+      authMethod === "builder-id";
     if (!isCodeWhispererSurface) return baseUrls;
 
     const region = (credentials?.providerSpecificData?.region || "us-east-1").trim();

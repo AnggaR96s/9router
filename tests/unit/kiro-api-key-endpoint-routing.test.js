@@ -20,11 +20,11 @@ describe("Kiro auth-aware endpoint routing", () => {
     ]);
   });
 
-  it("keeps Builder ID OAuth on the Kiro runtime surface", () => {
+  it("routes Builder ID OAuth to the CodeWhisperer surface", () => {
     expect(executor.getOrderedBaseUrls(credentials("builder-id"))).toEqual([
-      RUNTIME,
       CODEWHISPERER,
       Q,
+      RUNTIME,
     ]);
   });
 
