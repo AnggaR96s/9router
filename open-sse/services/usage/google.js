@@ -1,3 +1,4 @@
+import { fetchAndParseAntigravityWeeklyQuotas } from "./antigravityWeeklyQuota.js";
 /**
  * Google usage handlers (Gemini CLI + Antigravity)
  */
@@ -122,19 +123,24 @@ export async function getAntigravityUsage(accessToken, providerSpecificData, pro
     const subscriptionInfo = await getAntigravitySubscriptionInfo(accessToken, proxyOptions);
     const projectId = subscriptionInfo?.cloudaicompanionProject || null;
 
-    const response = await fetchWithTimeout(ANTIGRAVITY_CONFIG.quotaApiUrl, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "User-Agent": ANTIGRAVITY_CONFIG.userAgent,
-        "Content-Type": "application/json",
-        "X-Client-Name": "antigravity",
-        "X-Client-Version": ANTIGRAVITY_IDE_VERSION,
-      },
-      body: JSON.stringify({
-        ...(projectId ? { project: projectId } : {})
-      }),
-    }, 10000, proxyOptions);
+    const [response, weeklyQuotas] = await Promise.all([
+      fetchWithTimeout(ANTIGRAVITY_CONFIG.quotaApiUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "User-Agent": ANTIGRAVITY_CONFIG.userAgent,
+          "Content-Type": "application/json",
+          "X-Client-Name": "antigravity",
+          "X-Client-Version": ANTIGRAVITY_IDE_VERSION,
+        },
+        body: JSON.stringify({
+          ...(projectId ? { project: projectId } : {})
+        }),
+      }, 10000, proxyOptions),
+      projectId
+        ? fetchAndParseAntigravityWeeklyQuotas(accessToken, projectId, proxyOptions)
+        : Promise.resolve({}),
+    ]);
 
     if (response.status === 403) {
       return {
@@ -214,7 +220,10 @@ export async function getAntigravityUsage(accessToken, providerSpecificData, pro
 
     return {
       plan: subscriptionInfo?.currentTier?.name || "Unknown",
-      quotas,
+      quotas: {
+        ...quotas,
+        ...weeklyQuotas,
+      },
       subscriptionInfo,
     };
   } catch (error) {
