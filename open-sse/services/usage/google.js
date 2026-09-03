@@ -123,24 +123,19 @@ export async function getAntigravityUsage(accessToken, providerSpecificData, pro
     const subscriptionInfo = await getAntigravitySubscriptionInfo(accessToken, proxyOptions);
     const projectId = subscriptionInfo?.cloudaicompanionProject || null;
 
-    const [response, weeklyQuotas] = await Promise.all([
-      fetchWithTimeout(ANTIGRAVITY_CONFIG.quotaApiUrl, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "User-Agent": ANTIGRAVITY_CONFIG.userAgent,
-          "Content-Type": "application/json",
-          "X-Client-Name": "antigravity",
-          "X-Client-Version": ANTIGRAVITY_IDE_VERSION,
-        },
-        body: JSON.stringify({
-          ...(projectId ? { project: projectId } : {})
-        }),
-      }, 10000, proxyOptions),
-      projectId
-        ? fetchAndParseAntigravityWeeklyQuotas(accessToken, projectId, proxyOptions)
-        : Promise.resolve({}),
-    ]);
+    const response = await fetchWithTimeout(ANTIGRAVITY_CONFIG.quotaApiUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "User-Agent": ANTIGRAVITY_CONFIG.userAgent,
+        "Content-Type": "application/json",
+        "X-Client-Name": "antigravity",
+        "X-Client-Version": ANTIGRAVITY_IDE_VERSION,
+      },
+      body: JSON.stringify({
+        ...(projectId ? { project: projectId } : {})
+      }),
+    }, 10000, proxyOptions);
 
     if (response.status === 403) {
       return {
@@ -160,7 +155,12 @@ export async function getAntigravityUsage(accessToken, providerSpecificData, pro
       throw new Error(`Antigravity API error: ${response.status}`);
     }
 
-    const data = await response.json();
+    const [data, weeklyQuotas] = await Promise.all([
+      response.json(),
+      projectId
+        ? fetchAndParseAntigravityWeeklyQuotas(accessToken, projectId, proxyOptions)
+        : Promise.resolve({}),
+    ]);
     const quotas = {};
 
     // Parse model quotas (inspired by vscode-antigravity-cockpit)
