@@ -291,7 +291,9 @@ describe("Antigravity Usage: Weekly Quota Integration & Fail-Open", () => {
         };
       }
       if (url.includes(":retrieveUserQuotaSummary")) {
-        await new Promise((resolve) => setTimeout(resolve, 10 + Math.random() * 20));
+        const accIndex = accounts.findIndex((a) => a.token === token);
+        const delay = 10 + (accIndex >= 0 ? accIndex * 2 : 0);
+        await new Promise((resolve) => setTimeout(resolve, delay));
         return {
           ok: true,
           status: 200,
