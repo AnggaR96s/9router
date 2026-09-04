@@ -302,6 +302,11 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
       console.error(`[ChatCore] Failed to parse JSON from ${provider}:`, err.message);
       return createErrorResult(HTTP_STATUS.BAD_GATEWAY, `Invalid JSON response from ${provider}`);
     }
+    // Cline wraps the OpenAI body in {success, data:{...}}; unwrap so
+    // downstream OpenAI parsing sees choices/usage directly.
+    if (provider === "cline" && responseBody?.data?.choices) {
+      responseBody = responseBody.data;
+    }
   }
 
   reqLogger.logProviderResponse(providerResponse.status, providerResponse.statusText, providerResponse.headers, responseBody);
