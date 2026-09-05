@@ -5,6 +5,13 @@ const KNOWN_FREE_OPENCODE_MODELS = ["big-pickle"];
 const DEAD_FREE_OPENCODE_MODELS = new Set(["deepseek-v4-flash-free"]);
 
 export const FILTERS = {
+  // Public OpenAI-compatible catalogs: import all models returned by /models.
+  "openai": (models) =>
+    models
+      .filter((m) => m && typeof m === "object")
+      .map((m) => ({ id: m.id || m.name || m.model, name: m.name || m.id || m.model }))
+      .filter((m) => typeof m.id === "string" && m.id.trim()),
+
   "openrouter-free": (models) =>
     models
       .filter(

@@ -81,6 +81,7 @@ export default function ProviderDetailPage() {
   const [oneByOneSummary, setOneByOneSummary] = useState(null);
   const stopOneByOneRef = useRef(false);
   const [importingQoderModels, setImportingQoderModels] = useState(false);
+  const [importingProviderModels, setImportingProviderModels] = useState(false);
   const { copied, copy } = useCopyToClipboard();
 
   const AG_RISK_STORAGE_KEY = "ag_risk_confirmed";
@@ -556,6 +557,45 @@ export default function ProviderDetailPage() {
       }
     } catch (error) {
       console.log("Error deleting custom model:", error);
+    }
+  };
+
+  const handleImportProviderModels = async () => {
+    if (importingProviderModels || suggestedModels.length === 0) return;
+
+    setImportingProviderModels(true);
+    try {
+      const builtInIds = new Set(models.map((model) => model.id));
+      const existingCustomIds = new Set(
+        customModels
+          .filter((entry) => entry.providerAlias === providerStorageAlias && (entry.kind || entry.type || "llm") === "llm")
+          .map((entry) => entry.id)
+      );
+      const existingAliasModels = new Set(
+        Object.values(modelAliases).filter((model) => typeof model === "string")
+      );
+      let importedCount = 0;
+
+      for (const model of suggestedModels) {
+        const modelId = model.id || model.name || model.model;
+        if (!modelId || builtInIds.has(modelId) || existingCustomIds.has(modelId)) continue;
+        if (existingAliasModels.has(`${providerStorageAlias}/${modelId}`)) continue;
+
+        await handleAddCustomModel(modelId, "llm", providerStorageAlias);
+        existingCustomIds.add(modelId);
+        importedCount += 1;
+      }
+
+      alert(
+        importedCount > 0
+          ? `${translate("Successfully added")} ${importedCount} ${translate("models")}`
+          : translate("All models already exist, no new models added")
+      );
+    } catch (error) {
+      console.log("Error importing provider models:", error);
+      alert(translate("Error fetching models") + ": " + error.message);
+    } finally {
+      setImportingProviderModels(false);
     }
   };
 
@@ -1680,8 +1720,20 @@ export default function ProviderDetailPage() {
               ...kiloFreeModels.filter((fm) => !models.some((m) => m.id === fm.id)),
             ].filter((m) => { const k = getModelKind(m); return !k || k === "llm"; }).map((m) => m.id);
             const activeIds = allIds.filter((id) => !disabledModelIds.includes(id));
+            const canImportProviderModels = (providerId === "aihorde" || providerId === "opencode") && suggestedModels.length > 0;
             return (
               <div className="flex gap-2">
+                {canImportProviderModels && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon="download"
+                    onClick={handleImportProviderModels}
+                    disabled={importingProviderModels}
+                  >
+                    {importingProviderModels ? "Importing..." : "Import from /models"}
+                  </Button>
+                )}
                 {disabledModelIds.length > 0 && (
                   <Button size="sm" variant="secondary" icon="restart_alt" onClick={handleEnableAll}>
                     Active All
