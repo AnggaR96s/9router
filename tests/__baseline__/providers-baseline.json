@@ -1052,5 +1052,12 @@
     "validateUrl": "https://api.b.ai/v1/models",
     "thinkingFormat": "openai",
     "format": "openai"
+  },
+  "tokenharbor": {
+    "baseUrl": "https://tokenharbor.ai/v1/chat/completions",
+    "modelsUrl": "https://tokenharbor.ai/v1/models",
+    "validateUrl": "https://tokenharbor.ai/v1/models",
+    "thinkingFormat": "openai",
+    "format": "openai"
   }
 }

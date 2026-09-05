@@ -131,6 +131,27 @@ const LIVE_MODEL_RESOLVERS = {
   },
   aihorde: async () => fetchLiveCatalog("aihorde"),
   opencode: async () => fetchLiveCatalog("opencode"),
+  tokenharbor: async (conn) => {
+    if (!conn?.apiKey) return null;
+    try {
+      const response = await fetch("https://tokenharbor.ai/v1/models", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${conn.apiKey}`,
+        },
+        cache: "no-store",
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) return null;
+      const models = parseOpenAIStyleModels(await response.json())
+        .map((m) => ({ id: m?.id || m?.name || m?.model, name: m?.name || m?.id || m?.model }))
+        .filter((m) => typeof m.id === "string" && m.id.trim());
+      return models.length ? { models } : null;
+    } catch {
+      return null;
+    }
+  },
   bai: async (conn) => {
     if (!conn?.apiKey) return null;
     try {

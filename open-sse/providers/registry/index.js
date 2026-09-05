@@ -126,6 +126,7 @@ import p122 from "./xquik.js";
 import p124 from "./freebuff.js";
 import p125 from "./aihorde.js";
 import p126 from "./bai.js";
+import p127 from "./tokenharbor.js";
 
 export default [
   p0,
@@ -254,4 +255,5 @@ export default [
   p124,
   p125,
   p126,
+  p127,
 ];
