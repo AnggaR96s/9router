@@ -1059,5 +1059,12 @@
     "validateUrl": "https://tokenharbor.ai/v1/models",
     "thinkingFormat": "openai",
     "format": "openai"
+  },
+  "nous": {
+    "baseUrl": "https://inference-api.nousresearch.com/v1/chat/completions",
+    "modelsUrl": "https://inference-api.nousresearch.com/v1/models",
+    "validateUrl": "https://inference-api.nousresearch.com/v1/models",
+    "thinkingFormat": "openai",
+    "format": "openai"
   }
 }

@@ -152,6 +152,7 @@ const LIVE_MODEL_RESOLVERS = {
       return null;
     }
   },
+  nous: async () => fetchLiveCatalog("nous"),
   bai: async (conn) => {
     if (!conn?.apiKey) return null;
     try {

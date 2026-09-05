@@ -839,6 +839,14 @@ case "llm7": {
         }, effectiveProxy);
         return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
       }
+      case "nous": {
+        // /v1/models is public on Nous Research — probing it would always pass.
+        // Probe /chat/completions with a known-free model; only 401/403 = bad key.
+        const { probeNousChat } = await import("./nous.js");
+        return probeNousChat(connection.apiKey, (url, opts) =>
+          fetchWithConnectionProxy(url, opts, effectiveProxy)
+        );
+      }
       case "kimchi": {
         // Dual-auth: same validation endpoint as the OAuth flow — the token (API key
         // or OAuth access token) is sent as Authorization: Bearer.

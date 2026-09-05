@@ -127,6 +127,7 @@ import p124 from "./freebuff.js";
 import p125 from "./aihorde.js";
 import p126 from "./bai.js";
 import p127 from "./tokenharbor.js";
+import p128 from "./nous.js";
 
 export default [
   p0,
@@ -256,4 +257,5 @@ export default [
   p125,
   p126,
   p127,
+  p128,
 ];

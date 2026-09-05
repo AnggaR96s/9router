@@ -12,6 +12,7 @@ import { resolveGrokCliModels } from "open-sse/services/grokCliModels.js";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { fetchBaiModels } from "./bai.js";
 import { fetchTokenharborModels } from "./tokenharbor.js";
+import { fetchNousModels } from "./nous.js";
 import { resolveCursorModels } from "open-sse/services/cursorModels.js";
 
 const GEMINI_CLI_MODELS_URL = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels";
@@ -452,6 +453,18 @@ const PROVIDER_MODELS_CONFIG = {
       if (result.error) return result;
       if (!result.models.length) {
         return { models: [], warning: "Token Harbor returned no live models; falling back to static catalog." };
+      }
+      return result;
+    },
+  },
+  nous: {
+    customResolver: async (connection) => {
+      // /v1/models is public (no auth needed); pass the key anyway so providers
+      // that gate the catalog behind auth still work.
+      const result = await fetchNousModels(connection.apiKey);
+      if (result.error) return result;
+      if (!result.models.length) {
+        return { models: [], warning: "Nous Research returned no live models; falling back to static catalog." };
       }
       return result;
     },
