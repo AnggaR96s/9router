@@ -52,7 +52,11 @@ describe("grok-cli registry", () => {
     });
   });
 
-  it("maps effort virtual models to upstream grok-4.5", () => {
+  it("maps effort virtual models to upstream grok-4.5 and grok-4.6", () => {
+    for (const level of ["xhigh", "high", "medium", "low"]) {
+      expect(getModelUpstreamId("gcli", `grok-4.6-${level}`)).toBe("grok-4.6");
+    }
+    expect(getModelUpstreamId("gcli", "grok-4.6")).toBe("grok-4.6");
     expect(getModelUpstreamId("gcli", "grok-4.5-high")).toBe("grok-4.5");
     expect(getModelUpstreamId("gcli", "grok-4.5-medium")).toBe("grok-4.5");
     expect(getModelUpstreamId("gcli", "grok-4.5-low")).toBe("grok-4.5");
