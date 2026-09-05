@@ -1,8 +1,14 @@
 import crypto from "node:crypto";
+import os from "node:os";
+import { execSync } from "node:child_process";
 import { BaseExecutor } from "./base.js";
 import { PROVIDERS } from "../config/providers.js";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
 import { dbg } from "../utils/debugLog.js";
+import {
+  getFreebuffCliFingerprint,
+  getCachedFreebuffCliFingerprint,
+} from "../shared/freebuffFingerprint.js";
 import {
   FETCH_CONNECT_TIMEOUT_MS,
   DEFAULT_RETRY_CONFIG,
@@ -249,7 +255,7 @@ async function requestSession(token, model, proxyOptions) {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
-      "User-Agent": "codebuff-cli/0.0.138",
+      "User-Agent": "Bun/1.3.14",
       "x-freebuff-model": model,
     },
   }, proxyOptions);
@@ -276,6 +282,27 @@ async function requestSession(token, model, proxyOptions) {
       expiresAt: Number.isFinite(parsedExp) ? parsedExp : Date.now() + SESSION_DEFAULT_TTL_MS,
     };
     sessionCache.set(sessionCacheKey(token, model), entry);
+
+    // Session-limits soft-stop: the claim response carries per-model usage
+    // (rateLimitsByModel / active-session rateLimit). The official CLI shows
+    // "N of M sessions used, resets in …" and stops; hammering past it is the
+    // anti-abuse pattern that gets accounts flagged. When the allowance for
+    // THIS model is exhausted, fail fast with resetsAtMs so the account
+    // fallback rotates instead of re-claiming into a gate wall.
+    const rl = data.rateLimitsByModel?.[model] || data.rateLimit || null;
+    const used = Number(rl?.recentCount);
+    const total = Number(rl?.limit);
+    if (rl && Number.isFinite(used) && Number.isFinite(total) && used >= total) {
+      const resetMs = Number.isFinite(Date.parse(rl?.resetAt || ""))
+        ? Date.parse(rl.resetAt)
+        : Date.now() + 30 * 60 * 1000;
+      const err = new Error(
+        `Freebuff session allowance for ${model} is used up (${used}/${total}) — resets ${new Date(resetMs).toLocaleTimeString()}. Another account or model will serve this request.`,
+      );
+      err.status = 429;
+      err.resetsAtMs = resetMs;
+      throw err;
+    }
     return { instanceId: data.instanceId, status: "active" };
   }
   if (status === "none") {
@@ -331,7 +358,7 @@ async function startRun(token, model, proxyOptions) {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
-      "User-Agent": "codebuff-cli/0.0.138",
+      "User-Agent": "Bun/1.3.14",
     },
     body: JSON.stringify({
       action: "START",
@@ -369,7 +396,7 @@ async function finishRun(token, runId, status, proxyOptions) {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
-        "User-Agent": "codebuff-cli/0.0.138",
+        "User-Agent": "Bun/1.3.14",
       },
       body: JSON.stringify({ action: "FINISH", runId, status }),
       signal: AbortSignal.timeout(10_000),
@@ -445,9 +472,14 @@ export class FreebuffExecutor extends BaseExecutor {
     // Top-level wire shape — see header comment. `run_id` and
     // `freebuff_instance_id` are attached by execute() (they need the async
     // run/session registration), so this only sets the static parts.
+    // client_id uses the CLI-parity enhanced fingerprint when the login
+    // didn't store one — a `9router-<uuid>` string is trivially separable
+    // from every real CLI install (which always sends `enhanced-…`).
+    const storedFp = credentials?.providerSpecificData?.fingerprintId;
     body.codebuff_metadata = {
       client_id:
-        credentials?.providerSpecificData?.fingerprintId ||
+        (storedFp && storedFp.startsWith("enhanced-") && storedFp) ||
+        getCachedFreebuffCliFingerprint() ||
         `9router-${crypto.randomUUID()}`,
       cost_mode: "free",
     };
@@ -467,6 +499,10 @@ export class FreebuffExecutor extends BaseExecutor {
     if (!token) {
       throw new Error("Freebuff requires a connected Freebuff login (no access token found)");
     }
+
+    // Warm the CLI-parity fingerprint once (first request); every later call
+    // reuses the cached value so client_id is stable for this process.
+    try { await getFreebuffCliFingerprint(); } catch { /* fall back to 9router-<uuid> */ }
 
     // Fail fast while a known-dead (account,model) / (proxy,model) pair is in
     // cooldown — no session claim, no run registration, no upstream spam.
