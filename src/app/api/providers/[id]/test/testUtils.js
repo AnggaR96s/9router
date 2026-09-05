@@ -842,7 +842,7 @@ case "llm7": {
       case "nous": {
         // /v1/models is public on Nous Research — probing it would always pass.
         // Probe /chat/completions with a known-free model; only 401/403 = bad key.
-        const { probeNousChat } = await import("./nous.js");
+        const { probeNousChat } = await import("../models/nous.js");
         return probeNousChat(connection.apiKey, (url, opts) =>
           fetchWithConnectionProxy(url, opts, effectiveProxy)
         );
