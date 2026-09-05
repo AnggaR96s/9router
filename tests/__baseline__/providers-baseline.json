@@ -437,6 +437,9 @@
   "groq": {
     "baseUrl": "https://api.groq.com/openai/v1/chat/completions",
     "validateUrl": "https://api.groq.com/openai/v1/models",
+    "usage": {
+      "url": "https://api.groq.com/openai/v1/models"
+    },
     "format": "openai"
   },
   "hyperbolic": {
@@ -708,6 +711,9 @@
   "opencode-go": {
     "baseUrl": "https://opencode.ai/zen/go/v1/chat/completions",
     "headers": {},
+    "usage": {
+      "url": "https://opencode.ai/zen/go/v1/usage"
+    },
     "format": "openai",
     "transports": [
       {
@@ -1007,6 +1013,44 @@
     "quirks": {
       "preserveCacheControl": true
     },
+    "format": "openai"
+  },
+  "freebuff": {
+    "baseUrl": "https://www.codebuff.com/api/v1/chat/completions",
+    "format": "openai",
+    "headers": {
+      "User-Agent": "Bun/1.3.14"
+    },
+    "retry": {
+      "429": {
+        "attempts": 2,
+        "delayMs": 2000
+      },
+      "503": {
+        "attempts": 2,
+        "delayMs": 1500
+      }
+    },
+    "usage": {
+      "url": "https://www.codebuff.com/api/v1/freebuff/session"
+    }
+  },
+  "aihorde": {
+    "baseUrl": "https://oai.aihorde.net/v1/chat/completions",
+    "baseUrls": [
+      "https://oai.aihorde.net/v1/chat/completions"
+    ],
+    "format": "openai",
+    "noAuth": true,
+    "headers": {
+      "Authorization": "Bearer 0000000000"
+    }
+  },
+  "bai": {
+    "baseUrl": "https://api.b.ai/v1/chat/completions",
+    "modelsUrl": "https://api.b.ai/v1/models",
+    "validateUrl": "https://api.b.ai/v1/models",
+    "thinkingFormat": "openai",
     "format": "openai"
   }
 }

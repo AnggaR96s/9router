@@ -125,6 +125,7 @@ import p121 from "./alitp-intl.js";
 import p122 from "./xquik.js";
 import p124 from "./freebuff.js";
 import p125 from "./aihorde.js";
+import p126 from "./bai.js";
 
 export default [
   p0,
@@ -252,4 +253,5 @@ export default [
   p123,
   p124,
   p125,
+  p126,
 ];
