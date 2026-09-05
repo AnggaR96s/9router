@@ -217,6 +217,7 @@ export async function proxy(request) {
   }
 
   if (isPublicLlmApi(pathname)) {
+    if (request.method === "OPTIONS") return NextResponse.next();
     if (await canAccessPublicLlmApi(request)) return NextResponse.next();
     return NextResponse.json({ error: "API key required for remote API access" }, { status: 401 });
   }
