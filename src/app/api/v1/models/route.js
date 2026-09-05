@@ -153,6 +153,7 @@ const LIVE_MODEL_RESOLVERS = {
     }
   },
   nous: async () => fetchLiveCatalog("nous"),
+  orcarouter: async () => fetchLiveCatalog("orcarouter"),
   bai: async (conn) => {
     if (!conn?.apiKey) return null;
     try {

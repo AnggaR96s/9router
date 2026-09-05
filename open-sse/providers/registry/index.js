@@ -128,6 +128,7 @@ import p125 from "./aihorde.js";
 import p126 from "./bai.js";
 import p127 from "./tokenharbor.js";
 import p128 from "./nous.js";
+import p129 from "./orcarouter.js";
 
 export default [
   p0,
@@ -258,4 +259,5 @@ export default [
   p126,
   p127,
   p128,
+  p129,
 ];

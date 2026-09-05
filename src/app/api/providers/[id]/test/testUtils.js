@@ -847,6 +847,13 @@ case "llm7": {
           fetchWithConnectionProxy(url, opts, effectiveProxy)
         );
       }
+      case "orcarouter": {
+        // /v1/models works without a key on OrcaRouter — probe chat instead.
+        const { probeOrcarouterChat } = await import("../models/orcarouter.js");
+        return probeOrcarouterChat(connection.apiKey, (url, opts) =>
+          fetchWithConnectionProxy(url, opts, effectiveProxy)
+        );
+      }
       case "kimchi": {
         // Dual-auth: same validation endpoint as the OAuth flow — the token (API key
         // or OAuth access token) is sent as Authorization: Bearer.
