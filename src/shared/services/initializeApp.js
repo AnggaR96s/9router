@@ -118,6 +118,12 @@ async function runHeavyStartup() {
   import("@/sse/services/backgroundTokenRefresh.js")
     .then(({ startBackgroundTokenRefresh }) => startBackgroundTokenRefresh())
     .catch((e) => console.log("[BackgroundTokenRefresh] scheduler start failed:", e.message));
+
+  // Freebuff anti-abuse keeper: ad impressions + PostHog heartbeat + pacing.
+  // Idempotent + fail-open; never affects non-freebuff providers.
+  import("@/sse/services/freebuffKeeper.js")
+    .then(({ startFreebuffKeeper }) => startFreebuffKeeper())
+    .catch((e) => console.log("[FreebuffKeeper] scheduler start failed:", e.message));
 }
 
 function hasQuotaAutoPingEnabled(settings) {

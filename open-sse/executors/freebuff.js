@@ -10,6 +10,10 @@ import {
   getCachedFreebuffCliFingerprint,
 } from "../shared/freebuffFingerprint.js";
 import {
+  acquireFreebuffRequestSlot,
+  freebuffPacingRemainingMs,
+} from "../shared/freebuffPacing.js";
+import {
   FETCH_CONNECT_TIMEOUT_MS,
   DEFAULT_RETRY_CONFIG,
   resolveRetryEntry,
@@ -509,6 +513,21 @@ export class FreebuffExecutor extends BaseExecutor {
     const proxyKey = proxyKeyOf(proxyOptions);
     const poolId = proxyOptions?.proxyPoolId || null;
     const scope = `freebuff::${model}`;
+
+    // Pacing gate: one account must not serve requests faster than the minimum
+    // idle gap. Bursting past the gap is the exact anti-abuse signature that
+    // preceded real bans (25 req / 9 min). Fail fast with 429 + resetsAtMs so
+    // account fallback rotates instead of hammering the same token.
+    if (!acquireFreebuffRequestSlot(token)) {
+      const waitMs = freebuffPacingRemainingMs(token);
+      const err = new Error(
+        `Freebuff pacing: request too soon for this account — retry after ${Math.ceil(waitMs / 1000)}s (another account will serve this request).`,
+      );
+      err.status = 429;
+      err.resetsAtMs = Date.now() + waitMs;
+      throw err;
+    }
+
     const lockUntil = getCooldown(modelLockCooldowns, `${token}::${model}`);
     if (lockUntil) {
       const err = new Error(`Freebuff session locked to another model — retry after ${new Date(lockUntil).toLocaleTimeString()}`);
