@@ -155,7 +155,7 @@ function proxyKeyOf(proxyOptions) {
 function sessionGateFromText(text) {
   let parsed = {};
   try { parsed = JSON.parse(String(text || "")); } catch { parsed = {}; }
-  return classifySessionGate(parsed.error || parsed.error_type || "", parsed.message || "", parsed.currentModel || null);
+  return classifySessionGate(parsed.status || parsed.error || parsed.error_type || "", parsed.message || "", parsed.currentModel || null);
 }
 
 // Parse a 409/428/410 body into { kind, currentModel }. `msg` may be a whole
@@ -166,7 +166,7 @@ function sessionGateFromError(error) {
   if (start < 0) return null;
   try {
     const parsed = JSON.parse(msg.slice(start));
-    return classifySessionGate(parsed.error || "", parsed.message || "", parsed.currentModel || null);
+    return classifySessionGate(parsed.status || parsed.error || parsed.error_type || "", parsed.message || "", parsed.currentModel || null);
   } catch {
     return null;
   }
@@ -186,7 +186,7 @@ function classifySessionGate(code, message, currentModel) {
 }
 
 // Applies cooldowns and throws for non-reclaimable gates. Never returns for them.
-async function throwSessionGateError(gate, { token, model, proxyKey, poolId, log }) {
+async function throwSessionGateError(gate, { token, model, proxyKey, poolId, scope, log }) {
   if (gate.kind === "model_locked") {
     const until = Date.now() + MODEL_LOCK_COOLDOWN_MS;
     setCooldown(modelLockCooldowns, `${token}::${model}`, until);
@@ -529,7 +529,7 @@ export class FreebuffExecutor extends BaseExecutor {
       session = await ensureSession(token, model, proxyOptions);
     } catch (error) {
       const gate = sessionGateFromError(error);
-      if (gate) await throwSessionGateError(gate, { token, model, proxyKey, poolId, log });
+      if (gate) await throwSessionGateError(gate, { token, model, proxyKey, poolId, scope, log });
       log?.error?.("AUTH", `Freebuff session failed: ${error.message}`);
       throw error;
     }
@@ -633,7 +633,7 @@ export class FreebuffExecutor extends BaseExecutor {
         const gate = sessionGateFromText(text);
         if (gate.kind === "model_locked" || gate.kind === "limited_ip") {
           markFinished("cancelled");
-          await throwSessionGateError(gate, { token, model, proxyKey, poolId, log });
+          await throwSessionGateError(gate, { token, model, proxyKey, poolId, scope, log });
         }
 
         log?.debug?.("AUTH", `Freebuff ${response.status} session gate — re-claiming session`);
@@ -644,7 +644,7 @@ export class FreebuffExecutor extends BaseExecutor {
           activeRunId = runId;
         } catch (error) {
           const gate2 = sessionGateFromError(error);
-          if (gate2) await throwSessionGateError(gate2, { token, model, proxyKey, poolId, log });
+          if (gate2) await throwSessionGateError(gate2, { token, model, proxyKey, poolId, scope, log });
           log?.error?.("AUTH", `Freebuff session re-claim failed: ${error.message}`);
           throw error;
         }
@@ -654,7 +654,7 @@ export class FreebuffExecutor extends BaseExecutor {
           const text2 = await response.text().catch(() => "");
           const gate3 = sessionGateFromText(text2);
           if (gate3.kind === "model_locked" || gate3.kind === "limited_ip") {
-            await throwSessionGateError(gate3, { token, model, proxyKey, poolId, log });
+            await throwSessionGateError(gate3, { token, model, proxyKey, poolId, scope, log });
           }
           const err = new Error(
             `Freebuff session gate refused (${response.status}) — another freebuff instance may be holding the session. ${text2.slice(0, 160)}`,
