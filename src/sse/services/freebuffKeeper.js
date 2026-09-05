@@ -21,9 +21,6 @@
 // only.
 
 import * as log from "../utils/logger.js";
-import { appendFile } from "node:fs/promises";
-import path from "node:path";
-import os from "node:os";
 import {
   hashFreebuffToken,
   getFreebuffPacingGapMs,
@@ -49,24 +46,6 @@ let intervalHandle = null;
 let initialTimeoutHandle = null;
 let tickRunning = false;
 let lastTickAt = 0;
-
-// ─── Status log (persistent, greppable verification channel) ────────────────
-// Tray mode pipes server stdout away, so keeper results are unreadable in logs.
-// Append a one-line status per impression to ~/.9router/freebuffKeeper.log so
-// the user can verify auction+impression+click success without --log.
-function keeperLogFile() {
-  return (process.env.FREEBUFF_KEEPER_LOG_FILE || "").trim() ||
-    path.join(os.homedir(), ".9router", "freebuffKeeper.log");
-}
-
-async function appendKeeperStatus(line) {
-  if (isTruthyEnv(process.env.DISABLE_FREEBUFF_KEEPER_LOG)) return;
-  try {
-    await appendFile(keeperLogFile(), `${new Date().toISOString()} ${line}\n`, "utf8");
-  } catch {
-    /* fail-open: disk issues must never break the keeper tick */
-  }
-}
 
 function isNonServerRuntime() {
   if (typeof window !== "undefined") return true;
@@ -273,7 +252,6 @@ export async function runFreebuffKeeperTick(deps = {}) {
           "FB_KEEPER",
           `ad impression ${imp.ok ? "ok" : "fail(" + imp.status + ")"}${granted > 0 ? ` +${granted}credits` : ""} (${who})`
         );
-        await appendKeeperStatus(`impression ${imp.ok ? "ok" : "fail" + imp.status}${granted > 0 ? ` +${granted}credits` : ""} ${who}`);
 
         // Occasional click (~20% of impressions) — one per logical event, fresh
         // event id, dock context. Mirrors the CLI's recordClick cadence.
@@ -281,7 +259,6 @@ export async function runFreebuffKeeperTick(deps = {}) {
           try {
             const click = await recordClick(token, ad);
             log.info("FB_KEEPER", `ad click ${click.ok ? "ok" : "fail(" + click.status + ")"} (${who})`);
-            await appendKeeperStatus(`click ${click.ok ? "ok" : "fail" + click.status} ${who}`);
           } catch (clickErr) {
             log.debug("FB_KEEPER", `click failed (swallowed): ${clickErr?.message ?? String(clickErr)}`);
           }
