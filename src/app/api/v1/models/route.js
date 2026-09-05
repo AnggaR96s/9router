@@ -129,28 +129,33 @@ const LIVE_MODEL_RESOLVERS = {
         })),
     };
   },
-  aihorde: async () => {
-    try {
-      const response = await fetch("https://oai.aihorde.net/v1/models", {
-        method: "GET",
-        cache: "no-store",
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!response.ok) return null;
-      const data = await response.json();
-      const models = parseOpenAIStyleModels(data)
-        .map((m) => ({ id: m?.id || m?.name || m?.model, name: m?.name || m?.id || m?.model }))
-        .filter((m) => typeof m.id === "string" && m.id.trim());
-      return models.length ? { models } : null;
-    } catch {
-      return null;
-    }
-  },
+  aihorde: async () => fetchLiveCatalog("aihorde"),
+  opencode: async () => fetchLiveCatalog("opencode"),
 };
 
 const parseOpenAIStyleModels = (data) => {
   if (Array.isArray(data)) return data;
   return data?.data || data?.models || data?.results || [];
+};
+
+async function fetchLiveCatalog(providerId) {
+  const url = AI_PROVIDERS[providerId]?.modelsFetcher?.url;
+  if (!url) return null;
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const models = parseOpenAIStyleModels(data)
+      .map((m) => ({ id: m?.id || m?.name || m?.model, name: m?.name || m?.id || m?.model }))
+      .filter((m) => typeof m.id === "string" && m.id.trim());
+    return models.length ? { models } : null;
+  } catch {
+    return null;
+  }
 };
 
 // Header sent by fetchCompatibleModelIds to detect cross-instance /models fetches
@@ -274,12 +279,10 @@ export async function buildModelsList(kindFilter, options = {}) {
   try {
     connections = await getProviderConnections();
     connections = connections.filter(c => c.isActive !== false);
-    // AI Horde is a public anonymous provider: it has no DB connection row,
-    // but must still participate in /v1/models and routing like other free
-    // providers. Keep this synthetic row local to model discovery; auth.js
-    // creates the runtime no-auth credential separately.
-    if (!connections.some((c) => c.provider === "aihorde")) {
-      connections.push({ id: "noauth", provider: "aihorde", isActive: true, providerSpecificData: {} });
+    for (const publicProvider of ["aihorde", "opencode"]) {
+      if (!connections.some((c) => c.provider === publicProvider)) {
+        connections.push({ id: "noauth", provider: publicProvider, isActive: true, providerSpecificData: {} });
+      }
     }
   } catch (e) {
     console.log("Could not fetch providers, returning all models");
