@@ -21,6 +21,9 @@
 // only.
 
 import * as log from "../utils/logger.js";
+import { appendFile } from "node:fs/promises";
+import path from "node:path";
+import os from "node:os";
 import {
   hashFreebuffToken,
   getFreebuffPacingGapMs,
@@ -46,6 +49,24 @@ let intervalHandle = null;
 let initialTimeoutHandle = null;
 let tickRunning = false;
 let lastTickAt = 0;
+
+// ─── Status log (persistent, greppable verification channel) ────────────────
+// Tray mode pipes server stdout away, so keeper results are unreadable in logs.
+// Append a one-line status per impression to ~/.9router/freebuffKeeper.log so
+// the user can verify auction+impression+click success without --log.
+function keeperLogFile() {
+  return (process.env.FREEBUFF_KEEPER_LOG_FILE || "").trim() ||
+    path.join(os.homedir(), ".9router", "freebuffKeeper.log");
+}
+
+async function appendKeeperStatus(line) {
+  if (isTruthyEnv(process.env.DISABLE_FREEBUFF_KEEPER_LOG)) return;
+  try {
+    await appendFile(keeperLogFile(), `${new Date().toISOString()} ${line}\n`, "utf8");
+  } catch {
+    /* fail-open: disk issues must never break the keeper tick */
+  }
+}
 
 function isNonServerRuntime() {
   if (typeof window !== "undefined") return true;
@@ -144,6 +165,32 @@ function acknowledgeImpression(apiToken, ad) {
   });
 }
 
+// Sessionally plausible click: fresh event id, dock context, dwell variance.
+// Mirrors cli recordClick() — one click per logical event, server dedupes via
+// client_event_id.
+function recordClick(apiToken, ad) {
+  const eventId = uuid();
+  const dwellMs = Math.floor(1200 + Math.random() * 4800); // 1.2–6.0s
+  return fetch(`${FREEBUFF_BASE}/api/v1/ads/click`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiToken}`,
+      "User-Agent": CLI_UA,
+      "X-Freebuff-Event-Id": eventId,
+    },
+    body: JSON.stringify({
+      impUrl: ad.impUrl,
+      clientEventId: eventId,
+      surface: "waiting_room",
+      dockFrom: "dock",
+      dockDwellMs: dwellMs,
+      dockAccidentalClick: Math.random() < 0.08, // rare accidental clicks
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+}
+
 function sendHeartbeat(apiToken) {
   const distinctId = hashFreebuffToken(apiToken);
   return fetch(`${POSTHOG_HOST}/capture/`, {
@@ -221,10 +268,24 @@ export async function runFreebuffKeeperTick(deps = {}) {
         const imp = await acknowledgeImpression(token, ad);
         const granted = imp.ok ? ((await imp.json().catch(() => null))?.creditsGranted) : 0;
         st.lastAdAt.set(tKey, now);
+        const who = conn.email || conn.name || "?";
         log.info(
           "FB_KEEPER",
-          `ad impression ${imp.ok ? "ok" : "fail(" + imp.status + ")"}${granted > 0 ? ` +${granted}credits` : ""} (${conn.email || conn.name})`
+          `ad impression ${imp.ok ? "ok" : "fail(" + imp.status + ")"}${granted > 0 ? ` +${granted}credits` : ""} (${who})`
         );
+        await appendKeeperStatus(`impression ${imp.ok ? "ok" : "fail" + imp.status}${granted > 0 ? ` +${granted}credits` : ""} ${who}`);
+
+        // Occasional click (~20% of impressions) — one per logical event, fresh
+        // event id, dock context. Mirrors the CLI's recordClick cadence.
+        if (imp.ok && Math.random() < 0.2) {
+          try {
+            const click = await recordClick(token, ad);
+            log.info("FB_KEEPER", `ad click ${click.ok ? "ok" : "fail(" + click.status + ")"} (${who})`);
+            await appendKeeperStatus(`click ${click.ok ? "ok" : "fail" + click.status} ${who}`);
+          } catch (clickErr) {
+            log.debug("FB_KEEPER", `click failed (swallowed): ${clickErr?.message ?? String(clickErr)}`);
+          }
+        }
       } catch (err) {
         log.warn("FB_KEEPER", `connection tick failed (swallowed): ${err?.message ?? String(err)}`);
       }
