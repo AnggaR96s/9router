@@ -120,14 +120,15 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       }
       const earliest = expiries.sort()[0] || null;
       if (earliest) {
-        const earliestConn = lockedConns[0];
-        log.warn("AUTH", `${provider} | all ${connections.length} accounts locked for ${model || "all"} (${formatRetryAfter(earliest)}) | lastError=${earliestConn?.lastError?.slice(0, 50)}`);
+        const earliestConn = lockedConns.find((c) => getEarliestModelLockUntil(c) === earliest) || lockedConns[0];
+        const errorMatchesModel = earliestConn?.lastErrorModel === (model || null);
+        log.warn("AUTH", `${provider} | all ${connections.length} accounts locked for ${model || "all"} (${formatRetryAfter(earliest)}) | lastError=${errorMatchesModel ? earliestConn?.lastError?.slice(0, 50) : "<withheld>"}`);
         return {
           allRateLimited: true,
           retryAfter: earliest,
           retryAfterHuman: formatRetryAfter(earliest),
-          lastError: earliestConn?.lastError || null,
-          lastErrorCode: earliestConn?.errorCode || null
+          lastError: errorMatchesModel ? earliestConn?.lastError || null : null,
+          lastErrorCode: errorMatchesModel ? earliestConn?.errorCode || null : null
         };
       }
       log.warn("AUTH", `${provider} | all ${connections.length} accounts unavailable`);
@@ -272,6 +273,7 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
     testStatus: "unavailable",
     lastError: reason,
     errorCode: status,
+    lastErrorModel: model || null,
     lastErrorAt: new Date().toISOString(),
     backoffLevel: newBackoffLevel ?? backoffLevel
   });
@@ -329,6 +331,7 @@ export async function clearAccountError(connectionId, currentConnection, model =
       testStatus: "active",
       lastError: null,
       errorCode: null,
+      lastErrorModel: null,
       lastErrorAt: null,
       backoffLevel: 0
     });
