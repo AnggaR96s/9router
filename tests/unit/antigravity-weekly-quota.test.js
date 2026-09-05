@@ -84,8 +84,8 @@ describe("Antigravity Weekly Quota Parser & Fetcher", () => {
       // Gemini Weekly checks
       expect(result.gemini_weekly).toMatchObject({
         displayName: "Gemini Weekly",
-        total: 1000,
-        used: 14,
+        total: 100,
+        used: 1,
         unlimited: false,
       });
       expect(result.gemini_weekly.remainingPercentage).toBeCloseTo(98.583066, 4);
@@ -94,8 +94,8 @@ describe("Antigravity Weekly Quota Parser & Fetcher", () => {
       // Claude & GPT Weekly checks
       expect(result.claude_gpt_weekly).toMatchObject({
         displayName: "Claude & GPT Weekly",
-        total: 1000,
-        used: 1000,
+        total: 100,
+        used: 100,
         remainingPercentage: 0,
         unlimited: false,
       });
@@ -128,8 +128,8 @@ describe("Antigravity Weekly Quota Parser & Fetcher", () => {
       expect(result).toHaveProperty("gemini_weekly");
       expect(result.gemini_weekly.displayName).toBe("Gemini Weekly");
       expect(result.gemini_weekly.remainingPercentage).toBe(75);
-      expect(result.gemini_weekly.used).toBe(250);
-      expect(result.gemini_weekly.total).toBe(1000);
+      expect(result.gemini_weekly.used).toBe(25);
+      expect(result.gemini_weekly.total).toBe(100);
     });
 
     it("TEST C — compatibility fallback when window field is absent", async () => {
@@ -173,10 +173,10 @@ describe("Antigravity Weekly Quota Parser & Fetcher", () => {
       const result = parseAntigravityWeeklyQuotas(fixtureWithoutWindow);
       expect(result).toHaveProperty("gemini_weekly");
       expect(result.gemini_weekly.remainingPercentage).toBe(50);
-      expect(result.gemini_weekly.used).toBe(500);
+      expect(result.gemini_weekly.used).toBe(50);
       expect(result).toHaveProperty("claude_gpt_weekly");
       expect(result.claude_gpt_weekly.remainingPercentage).toBe(40);
-      expect(result.claude_gpt_weekly.used).toBe(600);
+      expect(result.claude_gpt_weekly.used).toBe(60);
     });
 
     it("TEST D — parses alternate envelope { quotaSummary: { groups: [...] } }", async () => {
@@ -303,7 +303,7 @@ describe("Antigravity Weekly Quota Parser & Fetcher", () => {
       };
       const res = parseAntigravityWeeklyQuotas(siblingDisabled);
       expect(res).toHaveProperty("claude_gpt_weekly");
-      expect(res.claude_gpt_weekly.used).toBe(1000);
+      expect(res.claude_gpt_weekly.used).toBe(100);
       expect(res.claude_gpt_weekly.remainingPercentage).toBe(0);
     });
 
@@ -374,11 +374,11 @@ describe("Antigravity Weekly Quota Parser & Fetcher", () => {
       const result = parseAntigravityWeeklyQuotas(fixture);
       expect(result.gemini_weekly.remainingPercentage).toBe(100);
       expect(result.gemini_weekly.used).toBe(0);
-      expect(result.gemini_weekly.total).toBe(1000);
+      expect(result.gemini_weekly.total).toBe(100);
 
       expect(result.claude_gpt_weekly.remainingPercentage).toBe(0);
-      expect(result.claude_gpt_weekly.used).toBe(1000);
-      expect(result.claude_gpt_weekly.total).toBe(1000);
+      expect(result.claude_gpt_weekly.used).toBe(100);
+      expect(result.claude_gpt_weekly.total).toBe(100);
     });
 
     it("TEST J — uses parseResetTime semantics for reset timestamps", async () => {
@@ -485,6 +485,95 @@ describe("Antigravity Weekly Quota Parser & Fetcher", () => {
       const cachedRes = await fetchAndParseAntigravityWeeklyQuotas("tok-cache-test", "proj-cache-test");
       expect(cachedRes).toHaveProperty("gemini_weekly");
       expect(proxyAwareFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("TEST K5 — cache key uses sha256 hash of token without raw token leakage or prefix collision", async () => {
+      const { getWeeklyCacheKey } = await import(
+        "../../open-sse/services/usage/antigravityWeeklyQuota.js"
+      );
+
+      const tokenA = "dummy-token-sameprefix-AAAAA";
+      const tokenB = "dummy-token-sameprefix-BBBBB";
+
+      const keyA = getWeeklyCacheKey("proj-1", tokenA);
+      const keyB = getWeeklyCacheKey("proj-1", tokenB);
+
+      expect(keyA).not.toBe(keyB);
+      expect(keyA.startsWith("proj-1:")).toBe(true);
+      expect(keyA).not.toContain("ya29.");
+      expect(keyA).not.toContain("sameprefix");
+    });
+
+    it("TEST K6 — options.force bypasses cached quotas and performs live fetch", async () => {
+      const { fetchAndParseAntigravityWeeklyQuotas, _resetWeeklyQuotaCacheForTesting } = await import(
+        "../../open-sse/services/usage/antigravityWeeklyQuota.js"
+      );
+      _resetWeeklyQuotaCacheForTesting();
+
+      proxyAwareFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          groups: [
+            {
+              displayName: "Gemini Models",
+              buckets: [
+                {
+                  window: "weekly",
+                  remainingFraction: 0.90,
+                  resetTime: "2026-09-10T12:00:00Z",
+                },
+              ],
+            },
+          ],
+        }),
+      });
+
+      // 1. Initial call populates cache
+      const res1 = await fetchAndParseAntigravityWeeklyQuotas("tok-force", "proj-force");
+      expect(res1.gemini_weekly.remainingPercentage).toBe(90);
+      expect(proxyAwareFetch).toHaveBeenCalledTimes(1);
+
+      // 2. Call with force: true bypasses cache
+      const res2 = await fetchAndParseAntigravityWeeklyQuotas("tok-force", "proj-force", null, { force: true });
+      expect(res2.gemini_weekly.remainingPercentage).toBe(90);
+      expect(proxyAwareFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("TEST K7 — exhausted weekly quotas (0% remaining) are evicted and not cached", async () => {
+      const { fetchAndParseAntigravityWeeklyQuotas, _resetWeeklyQuotaCacheForTesting } = await import(
+        "../../open-sse/services/usage/antigravityWeeklyQuota.js"
+      );
+      _resetWeeklyQuotaCacheForTesting();
+
+      proxyAwareFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          groups: [
+            {
+              displayName: "Gemini Models",
+              buckets: [
+                {
+                  window: "weekly",
+                  remainingFraction: 0,
+                  resetTime: "2026-09-10T12:00:00Z",
+                },
+              ],
+            },
+          ],
+        }),
+      });
+
+      // 1. Call with exhausted quota
+      const res1 = await fetchAndParseAntigravityWeeklyQuotas("tok-zero", "proj-zero");
+      expect(res1.gemini_weekly.remainingPercentage).toBe(0);
+      expect(proxyAwareFetch).toHaveBeenCalledTimes(1);
+
+      // 2. Subsequent call must NOT be served from a stale 60s cache
+      const res2 = await fetchAndParseAntigravityWeeklyQuotas("tok-zero", "proj-zero");
+      expect(res2.gemini_weekly.remainingPercentage).toBe(0);
+      expect(proxyAwareFetch).toHaveBeenCalledTimes(2);
     });
   });
 });

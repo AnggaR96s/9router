@@ -102,16 +102,16 @@ describe("Antigravity Usage: Weekly Quota Integration & Fail-Open", () => {
 
     // Weekly quotas are merged
     expect(usage.quotas["gemini_weekly"]).toMatchObject({
-      used: 14,
-      total: 1000,
+      used: 1,
+      total: 100,
       displayName: "Gemini Weekly",
       unlimited: false,
     });
     expect(usage.quotas["gemini_weekly"].remainingPercentage).toBeCloseTo(98.583066, 4);
 
     expect(usage.quotas["claude_gpt_weekly"]).toMatchObject({
-      used: 1000,
-      total: 1000,
+      used: 100,
+      total: 100,
       remainingPercentage: 0,
       displayName: "Claude & GPT Weekly",
       unlimited: false,

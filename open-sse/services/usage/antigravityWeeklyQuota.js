@@ -6,12 +6,37 @@
  * Best-effort, fail-open, and non-blocking.
  */
 
+import crypto from "crypto";
 import { ANTIGRAVITY_IDE_BASE_URL, ANTIGRAVITY_IDE_USER_AGENT, ANTIGRAVITY_IDE_VERSION } from "../../providers/shared.js";
 import { U, parseResetTime, fetchWithTimeout } from "./shared.js";
 
 const WEEKLY_QUOTA_TTL_MS = 60 * 1000;
 const weeklyQuotaCache = new Map();
 const inflightRequests = new Map();
+
+/**
+ * Generate a collision-resistant, leak-free cache key from projectId and full accessToken hash.
+ *
+ * @param {string} projectId
+ * @param {string} accessToken
+ * @returns {string}
+ */
+export function getWeeklyCacheKey(projectId, accessToken) {
+  const tokenHash = crypto
+    .createHash("sha256")
+    .update(String(accessToken || ""))
+    .digest("hex")
+    .slice(0, 16);
+  return `${projectId}:${tokenHash}`;
+}
+
+/**
+ * Reset in-memory cache (primarily for unit tests).
+ */
+export function _resetWeeklyQuotaCacheForTesting() {
+  weeklyQuotaCache.clear();
+  inflightRequests.clear();
+}
 
 /**
  * Parse raw retrieveUserQuotaSummary response into family-level weekly quotas.
@@ -84,14 +109,18 @@ export function parseAntigravityWeeklyQuotas(summaryData) {
     if (!Number.isFinite(rawFraction)) continue;
 
     const remainingFraction = Math.max(0, Math.min(1, rawFraction));
-    const total = 1000; // Normalized base matching 9Router convention
+    const remainingPercentage = remainingFraction * 100;
+
+    // Normalize to 0..100 percentage scale (used % / total 100) matching 9Router ratioQuota
+    // convention without fabricating an arbitrary request count (such as 1000).
+    const total = 100;
     const remaining = Math.round(total * remainingFraction);
     const used = Math.max(0, total - remaining);
-    const remainingPercentage = remainingFraction * 100;
 
     quotas[familyKey] = {
       used,
       total,
+      remainingFraction,
       resetAt: parseResetTime(weeklyBucket.resetTime),
       remainingPercentage,
       unlimited: false,
@@ -105,7 +134,7 @@ export function parseAntigravityWeeklyQuotas(summaryData) {
 /**
  * Fetch and parse Antigravity weekly quotas from Google Cloud Code API.
  * Fail-open: returns empty object on any failure.
- * Cached process-locally for 60s.
+ * Cached process-locally for 60s, with immediate bypass on force or exhaustion.
  *
  * @param {string} accessToken - OAuth access token
  * @param {string} projectId - Cloud AI Companion project ID
@@ -121,10 +150,13 @@ export async function fetchAndParseAntigravityWeeklyQuotas(
 ) {
   if (!accessToken || !projectId) return {};
 
-  const cacheKey = `${projectId}:${accessToken.slice(0, 16)}`;
+  const isForce = Boolean(options?.force || proxyOptions?.force);
+  const cacheKey = getWeeklyCacheKey(projectId, accessToken);
   const now = Date.now();
 
-  if (!options.force && weeklyQuotaCache.has(cacheKey)) {
+  if (isForce) {
+    weeklyQuotaCache.delete(cacheKey);
+  } else if (weeklyQuotaCache.has(cacheKey)) {
     const cached = weeklyQuotaCache.get(cacheKey);
     if (cached && cached.expiresAt > now) {
       return cached.quotas;
@@ -165,10 +197,19 @@ export async function fetchAndParseAntigravityWeeklyQuotas(
       const data = await response.json();
       const quotas = parseAntigravityWeeklyQuotas(data);
 
-      weeklyQuotaCache.set(cacheKey, {
-        quotas,
-        expiresAt: Date.now() + WEEKLY_QUOTA_TTL_MS,
-      });
+      // Do not cache exhausted quotas (0% remaining) for 60s to prevent stale green state
+      const isExhausted = Object.values(quotas).some(
+        (q) => typeof q?.remainingPercentage === "number" && q.remainingPercentage <= 0
+      );
+
+      if (!isExhausted && Object.keys(quotas).length > 0) {
+        weeklyQuotaCache.set(cacheKey, {
+          quotas,
+          expiresAt: Date.now() + WEEKLY_QUOTA_TTL_MS,
+        });
+      } else {
+        weeklyQuotaCache.delete(cacheKey);
+      }
 
       // Simple bounded cache cleanup
       if (weeklyQuotaCache.size > 100) {
