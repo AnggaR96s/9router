@@ -64,7 +64,8 @@ export default function ErrorLogClient() {
   }, [pagination.page, pagination.pageSize, filters]);
 
   useEffect(() => {
-    fetchLogs();
+    const timer = setTimeout(fetchLogs, 0);
+    return () => clearTimeout(timer);
   }, [fetchLogs]);
 
   useEffect(() => {

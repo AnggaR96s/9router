@@ -44,6 +44,7 @@ const freebuff = {
           "User-Agent": "Bun/1.3.14",
         },
         body: JSON.stringify({ fingerprintId }),
+        signal: AbortSignal.timeout(10_000),
       },
     );
     if (!response.ok) {
@@ -104,6 +105,7 @@ const freebuff = {
           Accept: "application/json",
           "User-Agent": "Bun/1.3.14",
         },
+        signal: AbortSignal.timeout(10_000),
       },
     );
     let data;
