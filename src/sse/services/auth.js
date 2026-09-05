@@ -58,6 +58,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
         id: "noauth",
         connectionName: "Public",
         isActive: true,
+        authType: "none",
         accessToken: "public",
         providerSpecificData: {
           connectionProxyEnabled: resolvedProxy.connectionProxyEnabled,

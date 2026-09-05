@@ -149,6 +149,17 @@ export class DefaultExecutor extends BaseExecutor {
   buildHeaders(credentials, stream = true, url, model) {
     const rt = credentials?.runtimeTransport;
     const headers = { "Content-Type": "application/json", ...(rt ? rt.headers : this.config.headers) };
+    // Public no-auth providers may declare an upstream sentinel in their
+    // registry headers (AI Horde uses Bearer 0000000000). Do not replace it
+    // with the local synthetic token `public`.
+    const isSyntheticPublicCredential =
+      (credentials?.id === "noauth" || credentials?.connectionId === "noauth") &&
+      !credentials?.apiKey &&
+      (!credentials?.accessToken || credentials.accessToken === "public");
+    if (credentials?.authType === "none" && isSyntheticPublicCredential) {
+      if (stream) headers["Accept"] = "text/event-stream";
+      return headers;
+    }
     const desc = rt?.auth || AUTH_DESCRIPTORS[this.provider] || this.resolveAuthDescriptor();
     // Hooks run BEFORE auth so dynamic overlays can't clobber the token.
     for (const hook of desc.hooks || []) HEADER_HOOKS[hook]?.(headers, credentials);

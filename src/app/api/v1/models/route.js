@@ -129,6 +129,23 @@ const LIVE_MODEL_RESOLVERS = {
         })),
     };
   },
+  aihorde: async () => {
+    try {
+      const response = await fetch("https://oai.aihorde.net/v1/models", {
+        method: "GET",
+        cache: "no-store",
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      const models = parseOpenAIStyleModels(data)
+        .map((m) => ({ id: m?.id || m?.name || m?.model, name: m?.name || m?.id || m?.model }))
+        .filter((m) => typeof m.id === "string" && m.id.trim());
+      return models.length ? { models } : null;
+    } catch {
+      return null;
+    }
+  },
 };
 
 const parseOpenAIStyleModels = (data) => {
@@ -257,6 +274,13 @@ export async function buildModelsList(kindFilter, options = {}) {
   try {
     connections = await getProviderConnections();
     connections = connections.filter(c => c.isActive !== false);
+    // AI Horde is a public anonymous provider: it has no DB connection row,
+    // but must still participate in /v1/models and routing like other free
+    // providers. Keep this synthetic row local to model discovery; auth.js
+    // creates the runtime no-auth credential separately.
+    if (!connections.some((c) => c.provider === "aihorde")) {
+      connections.push({ id: "noauth", provider: "aihorde", isActive: true, providerSpecificData: {} });
+    }
   } catch (e) {
     console.log("Could not fetch providers, returning all models");
   }
