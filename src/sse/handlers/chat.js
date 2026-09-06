@@ -68,6 +68,11 @@ export async function handleChat(request, clientRawRequest = null) {
     log.debug("AUTH", "No API key provided (local mode)");
   }
 
+  if (!modelStr) {
+    log.warn("CHAT", "Missing model");
+    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model");
+  }
+
   // Enforce API key if provided or if required by settings
   const settings = await getSettings();
   if (settings.requireApiKey && !apiKey) {
@@ -76,20 +81,19 @@ export async function handleChat(request, clientRawRequest = null) {
   }
 
   if (apiKey) {
-    const valid = await isValidApiKey(apiKey);
+    const valid = await isValidApiKey(apiKey, modelStr);
     if (valid === "QUOTA_EXCEEDED") {
       log.warn("AUTH", "API key quota exceeded");
       return errorResponse(HTTP_STATUS.TOO_MANY_REQUESTS, "API key token limit exceeded");
+    }
+    if (valid === "MODEL_NOT_ALLOWED") {
+      log.warn("AUTH", `Model "${modelStr}" not allowed for this API key`);
+      return errorResponse(HTTP_STATUS.FORBIDDEN, `Model "${modelStr}" is not allowed for this API key`);
     }
     if (!valid && settings.requireApiKey) {
       log.warn("AUTH", "Invalid API key (requireApiKey=true)");
       return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
     }
-  }
-
-  if (!modelStr) {
-    log.warn("CHAT", "Missing model");
-    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model");
   }
 
   // Bypass naming/warmup requests before combo rotation to avoid wasting rotation slots

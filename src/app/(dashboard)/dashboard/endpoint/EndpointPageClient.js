@@ -33,9 +33,11 @@ export default function APIPageClient({ machineId }) {
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyLimit, setNewKeyLimit] = useState("");
   const [newKeyReset, setNewKeyReset] = useState("never");
+  const [newKeyAllowedModels, setNewKeyAllowedModels] = useState("*");
   const [editingKey, setEditingKey] = useState(null);
   const [editLimit, setEditLimit] = useState("");
   const [editReset, setEditReset] = useState("never");
+  const [editAllowedModels, setEditAllowedModels] = useState("*");
   const [createdKey, setCreatedKey] = useState(null);
   const [confirmState, setConfirmState] = useState(null);
 
@@ -647,6 +649,7 @@ export default function APIPageClient({ machineId }) {
           name: newKeyName,
           tokenLimit: newKeyLimit ? Number(newKeyLimit) : 0,
           resetInterval: newKeyReset,
+          allowedModels: newKeyAllowedModels.trim() || "*",
         }),
       });
       const data = await res.json();
@@ -657,6 +660,7 @@ export default function APIPageClient({ machineId }) {
         setNewKeyName("");
         setNewKeyLimit("");
         setNewKeyReset("never");
+        setNewKeyAllowedModels("*");
         setShowAddModal(false);
       }
     } catch (error) {
@@ -1098,6 +1102,9 @@ export default function APIPageClient({ machineId }) {
                         Reset: every {key.resetInterval}
                       </span>
                     )}
+                    <span className="text-xs px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 font-medium">
+                      Models: {key.allowedModels && key.allowedModels !== "*" ? key.allowedModels : "All"}
+                    </span>
                     {key.tokenLimit > 0 && (key.usedTokens || 0) >= key.tokenLimit && (
                       <span className="text-xs px-2 py-0.5 rounded bg-red-500/10 text-red-500 font-semibold">
                         Quota Exceeded
@@ -1114,6 +1121,7 @@ export default function APIPageClient({ machineId }) {
                       setEditingKey(key);
                       setEditLimit(key.tokenLimit ? String(key.tokenLimit) : "");
                       setEditReset(key.resetInterval || "never");
+                      setEditAllowedModels(key.allowedModels || "*");
                     }}
                     className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary transition-all"
                     title="Edit key quota"
@@ -1196,6 +1204,12 @@ export default function APIPageClient({ machineId }) {
               <option value="30d">Every 30 Days (30d)</option>
             </select>
           </div>
+          <Input
+            label="Allowed Models (* for all, or comma-separated: claude-*, gpt-4o)"
+            value={newKeyAllowedModels}
+            onChange={(e) => setNewKeyAllowedModels(e.target.value)}
+            placeholder="* or claude-*, gpt-4o"
+          />
           <div className="flex gap-2 mt-2">
             <Button onClick={handleCreateKey} fullWidth disabled={!newKeyName.trim()}>
               Create
@@ -1242,6 +1256,12 @@ export default function APIPageClient({ machineId }) {
               <option value="30d">Every 30 Days (30d)</option>
             </select>
           </div>
+          <Input
+            label="Allowed Models (* for all, or comma-separated: claude-*, gpt-4o)"
+            value={editAllowedModels}
+            onChange={(e) => setEditAllowedModels(e.target.value)}
+            placeholder="* or claude-*, gpt-4o"
+          />
           <div className="flex gap-2 mt-2">
             <Button
               onClick={() => {
@@ -1249,6 +1269,7 @@ export default function APIPageClient({ machineId }) {
                 handleUpdateKeyQuota(editingKey.id, {
                   tokenLimit: editLimit ? Number(editLimit) : 0,
                   resetInterval: editReset,
+                  allowedModels: editAllowedModels.trim() || "*",
                 });
               }}
               fullWidth

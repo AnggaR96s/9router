@@ -35,6 +35,7 @@ export async function PUT(request, { params }) {
     if (body.resetInterval !== undefined) updateData.resetInterval = body.resetInterval;
     if (body.usedTokens !== undefined) updateData.usedTokens = Number(body.usedTokens);
     if (body.lastResetAt !== undefined) updateData.lastResetAt = body.lastResetAt;
+    if (body.allowedModels !== undefined) updateData.allowedModels = body.allowedModels;
 
     const updated = await updateApiKey(id, updateData);
 

@@ -14,6 +14,7 @@ function rowToKey(row) {
     usedTokens: row.usedTokens || 0,
     resetInterval: row.resetInterval || "never",
     lastResetAt: row.lastResetAt || null,
+    allowedModels: row.allowedModels || "*",
   };
 }
 
@@ -46,9 +47,10 @@ export async function createApiKey(name, machineId, options = {}) {
     usedTokens: Number(options.usedTokens) || 0,
     resetInterval: options.resetInterval || "never",
     lastResetAt: options.lastResetAt || now,
+    allowedModels: options.allowedModels || "*",
   };
   db.run(
-    `INSERT INTO apiKeys(id, key, name, machineId, isActive, createdAt, tokenLimit, usedTokens, resetInterval, lastResetAt) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO apiKeys(id, key, name, machineId, isActive, createdAt, tokenLimit, usedTokens, resetInterval, lastResetAt, allowedModels) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       apiKey.id,
       apiKey.key,
@@ -60,6 +62,7 @@ export async function createApiKey(name, machineId, options = {}) {
       apiKey.usedTokens,
       apiKey.resetInterval,
       apiKey.lastResetAt,
+      apiKey.allowedModels,
     ]
   );
   return apiKey;
@@ -73,7 +76,7 @@ export async function updateApiKey(id, data) {
     if (!row) return;
     const merged = { ...rowToKey(row), ...data };
     db.run(
-      `UPDATE apiKeys SET key = ?, name = ?, machineId = ?, isActive = ?, tokenLimit = ?, usedTokens = ?, resetInterval = ?, lastResetAt = ? WHERE id = ?`,
+      `UPDATE apiKeys SET key = ?, name = ?, machineId = ?, isActive = ?, tokenLimit = ?, usedTokens = ?, resetInterval = ?, lastResetAt = ?, allowedModels = ? WHERE id = ?`,
       [
         merged.key,
         merged.name,
@@ -83,6 +86,7 @@ export async function updateApiKey(id, data) {
         Number(merged.usedTokens) || 0,
         merged.resetInterval || "never",
         merged.lastResetAt || null,
+        merged.allowedModels || "*",
         id,
       ]
     );
@@ -97,7 +101,7 @@ export async function deleteApiKey(id) {
   return (res?.changes ?? 0) > 0;
 }
 
-export async function validateApiKey(key) {
+export async function validateApiKey(key, requestedModel = null) {
   const db = await getAdapter();
   let result = false;
 
@@ -115,6 +119,7 @@ export async function validateApiKey(key) {
     const tokenLimit = Number(row.tokenLimit) || 0;
     let usedTokens = Number(row.usedTokens) || 0;
     const resetInterval = row.resetInterval || "never";
+    const allowedModels = row.allowedModels || "*";
     const nowMs = Date.now();
     let lastResetMs = row.lastResetAt
       ? new Date(row.lastResetAt).getTime()
@@ -151,6 +156,33 @@ export async function validateApiKey(key) {
     if (tokenLimit > 0 && usedTokens >= tokenLimit) {
       result = "QUOTA_EXCEEDED";
       return;
+    }
+
+    // Check allowed models
+    if (requestedModel && allowedModels && allowedModels.trim() !== "*" && allowedModels.trim() !== "") {
+      const allowedList = allowedModels
+        .split(",")
+        .map((m) => m.trim().toLowerCase())
+        .filter(Boolean);
+
+      const req = requestedModel.toLowerCase();
+      const isAllowed = allowedList.some((allowed) => {
+        if (allowed === "*" || allowed === req) return true;
+        if (allowed.endsWith("*")) {
+          const prefix = allowed.slice(0, -1);
+          return req.startsWith(prefix);
+        }
+        if (allowed.startsWith("*")) {
+          const suffix = allowed.slice(1);
+          return req.endsWith(suffix);
+        }
+        return false;
+      });
+
+      if (!isAllowed) {
+        result = "MODEL_NOT_ALLOWED";
+        return;
+      }
     }
 
     result = true;
