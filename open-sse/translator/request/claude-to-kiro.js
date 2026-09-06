@@ -327,6 +327,9 @@ export function claudeToKiroRequest(model, body, stream, credentials) {
   };
 
   if (profileArn) payload.profileArn = profileArn;
+  // No top-level `systemPrompt`: GenerateAssistantResponse answers any payload
+  // carrying it with 400 {"reason":"REQUEST_BODY_INVALID"}. The same text is
+  // already delivered through contentPrefix.
   if (additionalModelRequestFields) {
     payload.additionalModelRequestFields = additionalModelRequestFields;
   }

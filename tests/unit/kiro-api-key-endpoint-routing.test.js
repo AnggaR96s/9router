@@ -36,11 +36,12 @@ describe("Kiro auth-aware endpoint routing", () => {
     ]);
   });
 
-  it("regionalizes AWS endpoints for IDC without changing Kiro runtime", () => {
+  it("routes non-us-east-1 IDC accounts to the regional Amazon Q host", () => {
+    // codewhisperer.<region>.amazonaws.com has no DNS record outside
+    // us-east-1; q.<region>.amazonaws.com is the only host that resolves
+    // and accepts the region-bound token.
     expect(executor.getOrderedBaseUrls(credentials("idc", "eu-west-1"))).toEqual([
-      "https://codewhisperer.eu-west-1.amazonaws.com/generateAssistantResponse",
       "https://q.eu-west-1.amazonaws.com/generateAssistantResponse",
-      RUNTIME,
     ]);
   });
 
