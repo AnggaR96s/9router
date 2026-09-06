@@ -113,6 +113,11 @@ export async function getErrorLogs(filter = {}) {
     [...params, pageSize, (page - 1) * pageSize]
   );
 
+  // Resolve connection display names (displayName || name || email) — one
+  // batch lookup so the UI can show the account name next to the raw id
+  // without N queries.
+  const nameMap = await resolveConnectionNames(rows.map((r) => r.connectionId).filter(Boolean));
+
   const details = rows.map((r) => ({
     id: r.id,
     timestamp: r.timestamp,
@@ -120,6 +125,7 @@ export async function getErrorLogs(filter = {}) {
     provider: r.provider,
     model: r.model,
     connectionId: r.connectionId,
+    connectionName: r.connectionId ? (nameMap.get(r.connectionId) || null) : null,
     comboName: r.comboName,
     statusCode: r.statusCode,
     errorMessage: r.errorMessage,
@@ -160,6 +166,36 @@ export async function getDistinctErrorProviders() {
   const db = await getAdapter();
   const rows = db.all(`SELECT DISTINCT provider FROM errorLogs WHERE provider IS NOT NULL ORDER BY provider ASC`);
   return rows.map((r) => r.provider);
+}
+
+/**
+ * Batch-resolve connection display names for a set of connection ids.
+ * Returns a Map<id, name> using displayName || name || email || null.
+ * Unresolvable ids (deleted connections, combo ids, etc.) are absent.
+ */
+export async function resolveConnectionNames(ids) {
+  const map = new Map();
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return map;
+  const db = await getAdapter();
+  // providerConnections stores displayName/email/etc inside the data JSON,
+  // while name is a top-level column — read both and derive the display name.
+  try {
+    const placeholders = unique.map(() => "?").join(",");
+    const rows = db.all(
+      `SELECT id, name, email, data FROM providerConnections WHERE id IN (${placeholders})`,
+      unique
+    );
+    for (const row of rows) {
+      const extra = parseJson(row.data, {});
+      const displayName =
+        extra.displayName || row.name || row.email || extra.githubLogin || extra.githubEmail || null;
+      if (displayName) map.set(row.id, displayName);
+    }
+  } catch {
+    // Fallback: no names resolvable — callers degrade to raw connectionId.
+  }
+  return map;
 }
 
 export async function clearErrorLogs() {

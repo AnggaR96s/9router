@@ -282,8 +282,17 @@ export default function ErrorLogClient() {
                       <td className="max-w-[160px] truncate p-4 text-sm text-text-main">
                         {AI_PROVIDERS[logItem.provider]?.name || logItem.provider || "Unknown provider"}
                       </td>
-                      <td className="max-w-[160px] truncate p-4 font-mono text-sm text-text-main">
-                        {logItem.connectionId || "—"}
+                      <td className="max-w-[180px] truncate p-4 font-mono text-sm text-text-main">
+                        {logItem.connectionId ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="truncate">{logItem.connectionName || logItem.connectionId}</span>
+                            {logItem.connectionName ? (
+                              <span className="truncate text-xs text-text-muted">{logItem.connectionId}</span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="whitespace-nowrap p-4 text-center text-sm">
                         <span
@@ -351,7 +360,14 @@ export default function ErrorLogClient() {
               </div>
               <div>
                 <span className="text-text-muted">Account:</span>{" "}
-                <span className="break-all font-mono text-text-main">{selectedLog.connectionId || "—"}</span>
+                {selectedLog.connectionName ? (
+                  <>
+                    <span className="break-all font-mono text-text-main">{selectedLog.connectionName}</span>{" "}
+                    <span className="break-all font-mono text-xs text-text-muted">({selectedLog.connectionId})</span>
+                  </>
+                ) : (
+                  <span className="break-all font-mono text-text-main">{selectedLog.connectionId || "—"}</span>
+                )}
               </div>
               <div>
                 <span className="text-text-muted">Combo:</span>{" "}
