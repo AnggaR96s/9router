@@ -1065,7 +1065,19 @@
     "modelsUrl": "https://inference-api.nousresearch.com/v1/models",
     "validateUrl": "https://inference-api.nousresearch.com/v1/models",
     "thinkingFormat": "openai",
-    "format": "openai"
+    "format": "openai",
+    "headers": {
+      "User-Agent": "OpenAI/Python 2.24.0",
+      "X-Stainless-Arch": "x64",
+      "X-Stainless-Async": "false",
+      "X-Stainless-Lang": "python",
+      "X-Stainless-Os": "Linux",
+      "X-Stainless-Package-Version": "2.24.0",
+      "X-Stainless-Read-Timeout": "30.0",
+      "X-Stainless-Retry-Count": "0",
+      "X-Stainless-Runtime": "CPython",
+      "X-Stainless-Runtime-Version": "3.11.15"
+    }
   },
   "orcarouter": {
     "baseUrl": "https://www.orcarouter.ai/v1/chat/completions",
