@@ -1,3 +1,9 @@
+# v0.1.3 (2026-09-06)
+
+## Features
+- **Freebuff**: lower request pacing gap to 20s (closer to a human cadence; tune via `FREEBUFF_PACING_GAP_MS`)
+- **Freebuff**: bounded wait for single-account use — when every account is pacing/model-locked and the earliest lock clears within 30s, the request waits instead of failing with 429 (tune via `FREEBUFF_MAX_WAIT_MS`); other providers keep fail-fast behavior
+
 # v0.1.2 (2026-09-06)
 
 ## Features

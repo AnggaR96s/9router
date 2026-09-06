@@ -1,6 +1,6 @@
 {
   "name": "nggrouter",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "9Router CLI - Start and manage 9Router server (AnggaR96s fork)",
   "bin": {
     "9router": "./cli.js",
