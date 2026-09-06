@@ -195,7 +195,7 @@ export default function ErrorLogClient() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="ghost"
               onClick={() => {
@@ -208,6 +208,7 @@ export default function ErrorLogClient() {
               variant="outline"
               onClick={handleClearFilters}
               disabled={!Object.values(filters).some((value) => value)}
+              className="whitespace-nowrap"
             >
               Clear filters
             </Button>
@@ -217,7 +218,7 @@ export default function ErrorLogClient() {
               icon="delete_sweep"
               onClick={handleClearLogs}
               disabled={clearing || pagination.totalItems === 0}
-              className="border-red-500/30 text-red-500 hover:bg-red-500/10 hover:text-red-600"
+              className="border-red-500/30 text-red-500 hover:bg-red-500/10 hover:text-red-600 whitespace-nowrap"
             >
               {clearing ? "Clearing…" : "Clear all logs"}
             </Button>
