@@ -302,7 +302,7 @@ export default function ErrorLogClient() {
               </div>
               <div>
                 <span className="text-text-muted">Endpoint:</span>{" "}
-                <span className="font-mono text-text-main">{selectedLog.endpoint || "/v1/chat/completions"}</span>
+                <span className="break-all font-mono text-text-main">{selectedLog.endpoint || "/v1/chat/completions"}</span>
               </div>
               <div>
                 <span className="text-text-muted">Provider:</span>{" "}
@@ -310,11 +310,11 @@ export default function ErrorLogClient() {
               </div>
               <div>
                 <span className="text-text-muted">Model:</span>{" "}
-                <span className="font-mono text-text-main">{selectedLog.model}</span>
+                <span className="break-all font-mono text-text-main">{selectedLog.model}</span>
               </div>
               <div>
                 <span className="text-text-muted">Account:</span>{" "}
-                <span className="font-mono text-text-main">{selectedLog.connectionId || "—"}</span>
+                <span className="break-all font-mono text-text-main">{selectedLog.connectionId || "—"}</span>
               </div>
               <div>
                 <span className="text-text-muted">Combo:</span>{" "}
