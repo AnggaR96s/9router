@@ -53,10 +53,22 @@ export function getFreebuffMaxWaitMs() {
  * How long the handler should wait before retrying the same account.
  * Returns 0 when there is nothing to wait for, the lock is already expired,
  * or the wait would exceed the bounded max (fail fast instead).
+ *
+ * `retryAfter` accepts any of: absolute epoch ms (number), ISO string
+ * (what auth.js returns via getEarliestModelLockUntil), or a Date.
  */
-export function computeFreebuffWaitMs(retryAfterMs, nowMs = Date.now()) {
-  if (!retryAfterMs) return 0;
-  const waitMs = retryAfterMs - nowMs;
+export function computeFreebuffWaitMs(retryAfter, nowMs = Date.now()) {
+  if (retryAfter == null) return 0;
+  let t;
+  if (retryAfter instanceof Date) {
+    t = retryAfter.getTime();
+  } else if (typeof retryAfter === "string") {
+    t = new Date(retryAfter).getTime();
+  } else {
+    t = Number(retryAfter);
+  }
+  if (!Number.isFinite(t)) return 0;
+  const waitMs = t - nowMs;
   if (waitMs <= 0) return 0;
   const max = getFreebuffMaxWaitMs();
   return waitMs <= max ? waitMs : 0;

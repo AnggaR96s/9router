@@ -60,6 +60,20 @@ describe("computeFreebuffWaitMs", () => {
     expect(computeFreebuffWaitMs(15_000, 5_000)).toBe(10_000);
   });
 
+  it("accepts an ISO string (auth.js retryAfter format)", () => {
+    // auth.js returns getEarliestModelLockUntil() → ISO string of a future lock
+    const iso = new Date(15_000).toISOString();
+    expect(computeFreebuffWaitMs(iso, 5_000)).toBe(10_000);
+  });
+
+  it("accepts a Date object", () => {
+    expect(computeFreebuffWaitMs(new Date(15_000), 5_000)).toBe(10_000);
+  });
+
+  it("returns 0 for an already-expired ISO string", () => {
+    expect(computeFreebuffWaitMs(new Date(1_000).toISOString(), 5_000)).toBe(0);
+  });
+
   it("returns 0 when the wait would exceed the max (fail fast)", () => {
     // retryAfter 45s − now 5s = 40s wait, above the 30s max → fail fast.
     expect(computeFreebuffWaitMs(45_000, 5_000)).toBe(0);
