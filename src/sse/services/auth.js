@@ -282,7 +282,11 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
   const connName = conn?.displayName || conn?.name || conn?.email || connectionId.slice(0, 8);
   log.warn("AUTH", `${connName} locked ${lockKey} for ${Math.round(cooldownMs / 1000)}s [${status}]`);
 
-  if (provider && status && reason) {
+  // Pacing rejects (429 "Freebuff pacing") are expected control-flow — the
+  // bounded wait retries the same account. Skip the loud ❌ line for those;
+  // the [AUTH] lock warn above already covers it. Real errors still log.
+  const isPacingSkip = status === 429 && /Freebuff pacing/i.test(reason);
+  if (provider && status && reason && !isPacingSkip) {
     console.error(`❌ ${provider} [${status}]: ${reason}`);
   }
 
