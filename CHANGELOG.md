@@ -1,3 +1,35 @@
+# v0.1.2 (2026-09-06)
+
+## Features
+- **Dashboard**: add Error Log page (`/dashboard/error-log`) with SQLite-backed error logging and filtering via `GET /api/usage/error-logs`
+- **API**: allow CORS preflight on public LLM API endpoints so browser clients can call `/v1/*` from other origins
+- **Providers**: use official Hyperbolic logo from `app.hyperbolic.ai`
+
+## Fixes
+- **Combo**: fail over to the next panel when a panel returns an empty stream (keepalive-only or immediate `[DONE]`)
+- **Auth**: scope account errors to the model that produced them — withhold unrelated model errors from logs and responses
+- **OAuth**: add 10s timeout to Freebuff session/verify requests so they cannot hang forever
+- **Error Log UI**: fix double-fetch race on initial load
+
+# v0.1.1 (2026-09-06)
+
+## Fixes
+- **Updater**: point version check and update command at the `nggrouter` package (`registry.npmjs.org/nggrouter/latest`, `npm i -g nggrouter@latest --prefer-online`) so the dashboard banner no longer compares against upstream `9router`
+- **Dashboard**: pause console-log auto-scroll when the user scrolls up to read history, with a jump-to-latest button
+
+# v0.1.0 (2026-09-06)
+
+## Features
+- Publish this fork on npm as **`nggrouter`** (bin aliases: `9router`, `nggrouter`)
+- **Providers**: add Freebuff (with ad keeper + pacing + heartbeat), AI Horde, B.AI, Token Harbor, Nous Research, OrcaRouter
+- **Dashboard**: bulk "Import from /models" for AI Horde and OpenCode Free
+- **Usage**: surface Antigravity weekly quota (Gemini / Claude & GPT weekly) next to per-model quota
+- **Providers**: official logos — Fireworks, Cerebras, Freebuff, B.AI, Nous Research, OrcaRouter
+- **Freebuff keeper**: background ad auction + impression ack + occasional `ads.clicked`, 35s request pacing per account, PostHog heartbeat
+
+## Fixes
+- **Codex**: lock every model in an account on usage-limit (`modelLock___all`) so the router stops cycling exhausted accounts
+
 # v0.5.69 (2026-09-05)
 
 ## Features
