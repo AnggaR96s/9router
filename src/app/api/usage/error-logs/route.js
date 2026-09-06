@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getErrorLogs, getErrorLogById } from "@/lib/db/repos/errorLogsRepo.js";
+import { getErrorLogs, getErrorLogById, clearErrorLogs } from "@/lib/db/repos/errorLogsRepo.js";
 
 /**
  * GET /api/usage/error-logs
@@ -40,5 +40,19 @@ export async function GET(request) {
   } catch (error) {
     console.error("[API] Failed to get error logs:", error);
     return NextResponse.json({ error: "Failed to fetch error logs" }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/usage/error-logs
+ * Clears all error log records.
+ */
+export async function DELETE() {
+  try {
+    const result = await clearErrorLogs();
+    return NextResponse.json({ ok: true, deleted: result.deleted });
+  } catch (error) {
+    console.error("[API] Failed to clear error logs:", error);
+    return NextResponse.json({ error: "Failed to clear error logs" }, { status: 500 });
   }
 }

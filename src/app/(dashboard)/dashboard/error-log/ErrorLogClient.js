@@ -79,6 +79,32 @@ export default function ErrorLogClient() {
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
+  const [clearing, setClearing] = useState(false);
+  const [lastCleared, setLastCleared] = useState(null);
+
+  const handleClearLogs = async () => {
+    if (!window.confirm("Clear ALL error logs? This cannot be undone.")) return;
+    setClearing(true);
+    try {
+      const res = await fetch("/api/usage/error-logs", { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to clear");
+      setLogs([]);
+      setPagination((prev) => ({ ...prev, page: 1, totalItems: 0, totalPages: 0 }));
+      setSelectedLog(null);
+      setIsDrawerOpen(false);
+      setLastCleared(data.deleted);
+      // Refresh filters-dependent counts (e.g. provider list) — fetchLogs will
+      // run on next pagination/filter change; also refetch once to settle state.
+      fetchLogs();
+    } catch (error) {
+      console.error("Failed to clear error logs:", error);
+      window.alert(error.message || "Failed to clear error logs");
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const renderMetaChips = (meta) => {
     if (!meta) return null;
     const chips = [];
@@ -184,6 +210,13 @@ export default function ErrorLogClient() {
               disabled={!Object.values(filters).some((value) => value)}
             >
               Clear filters
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleClearLogs}
+              disabled={clearing}
+            >
+              {clearing ? "Clearing…" : "Clear all logs"}
             </Button>
           </div>
         </div>

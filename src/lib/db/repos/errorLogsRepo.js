@@ -161,3 +161,12 @@ export async function getDistinctErrorProviders() {
   const rows = db.all(`SELECT DISTINCT provider FROM errorLogs WHERE provider IS NOT NULL ORDER BY provider ASC`);
   return rows.map((r) => r.provider);
 }
+
+export async function clearErrorLogs() {
+  const db = await getAdapter();
+  const before = db.get(`SELECT COUNT(*) c FROM errorLogs`)?.c || 0;
+  db.run(`DELETE FROM errorLogs`);
+  // Reset the auto-increment sequence if the table uses one.
+  try { db.run(`DELETE FROM sqlite_sequence WHERE name = 'errorLogs'`); } catch { /* no sequence table */ }
+  return { deleted: before };
+}
