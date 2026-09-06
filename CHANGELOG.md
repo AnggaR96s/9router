@@ -1,3 +1,17 @@
+# v0.1.6 (2026-09-07)
+
+## Features
+- **Nous Portal OAuth** — sign in to Nous Research with the Hermes CLI device flow (no API key needed): browser login, automatic token refresh via `X-Nous-Refresh-Token`, and per-model capability table (vision / pdf / audio / video / reasoning / context window, up to 1.31M) baked from the live gateway catalog. API-key auth still works side by side.
+- **Error log: clear all logs** — new trash button in the error-log dashboard plus a `DELETE` endpoint to wipe records at once.
+- **Error log: connection names** — error entries now show the connection name next to the account id, so logs are readable without cross-referencing.
+
+## Fixes
+- **Kiro**: drop the top-level `systemPrompt` field — `GenerateAssistantResponse` rejects any payload carrying it with `400 REQUEST_BODY_INVALID` (same text still reaches the model via `contentPrefix`). Also route non-us-east-1 accounts to the regional Amazon Q endpoint `https://q.<region>.amazonaws.com/generateAssistantResponse` — `codewhisperer.<region>.amazonaws.com` has no DNS record outside us-east-1 and the default hosts reject region-bound tokens with 403.
+- **UI**: model "Test" buttons can now run concurrently on the provider page — testing one model no longer blocks the others.
+- **UI**: API key action buttons no longer overlap on mobile (responsive flex layout + wrapping).
+- **UI**: error-log action buttons wrap properly on narrow screens; "Clear all logs" button styling refined.
+- **Log**: quieter Freebuff pacing-skip messages (less noise in the console).
+
 # v0.1.5 (2026-09-06)
 
 ## Fixes
