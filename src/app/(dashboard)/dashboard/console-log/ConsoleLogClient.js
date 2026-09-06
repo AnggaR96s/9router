@@ -22,7 +22,12 @@ function colorLine(line) {
 export default function ConsoleLogClient() {
   const [logs, setLogs] = useState([]);
   const [connected, setConnected] = useState(false);
+  const [stickToBottom, setStickToBottom] = useState(true);
+  const [showJumpDown, setShowJumpDown] = useState(false);
   const logRef = useRef(null);
+
+  // How close to the bottom counts as "at the bottom" (px)
+  const STICK_THRESHOLD_PX = 60;
 
   const handleClear = async () => {
     try {
@@ -62,11 +67,30 @@ export default function ConsoleLogClient() {
     return () => es.close();
   }, []);
 
-  // Auto-scroll to bottom on new logs
+  // Track scroll position: only auto-stick when the user is already at/near
+  // the bottom. Scrolling up pauses auto-scroll so new logs don't yank the
+  // view back down while reading history.
+  const handleScroll = () => {
+    const el = logRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD_PX;
+    setStickToBottom(atBottom);
+    setShowJumpDown(!atBottom);
+  };
+
+  const jumpToBottom = () => {
+    const el = logRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    setStickToBottom(true);
+    setShowJumpDown(false);
+  };
+
+  // Auto-scroll to bottom on new logs — only if the user is already at bottom
   useEffect(() => {
-    if (!logRef.current) return;
+    if (!logRef.current || !stickToBottom) return;
     logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [logs]);
+  }, [logs, stickToBottom]);
 
   return (
     <div className="">
@@ -76,18 +100,31 @@ export default function ConsoleLogClient() {
             Clear
           </Button>
         </div>
-        <div
-          ref={logRef}
-          className="bg-black rounded-b-lg p-4 text-xs font-mono h-[calc(100vh-220px)] overflow-y-auto"
-        >
-          {logs.length === 0 ? (
-            <span className="text-text-muted">No console logs yet.</span>
-          ) : (
-            <div className="space-y-0.5">
-              {logs.map((line, i) => (
-                <div key={i}>{colorLine(line)}</div>
-              ))}
-            </div>
+        <div className="relative">
+          <div
+            ref={logRef}
+            onScroll={handleScroll}
+            className="bg-black rounded-b-lg p-4 text-xs font-mono h-[calc(100vh-220px)] overflow-y-auto"
+          >
+            {logs.length === 0 ? (
+              <span className="text-text-muted">No console logs yet.</span>
+            ) : (
+              <div className="space-y-0.5">
+                {logs.map((line, i) => (
+                  <div key={i}>{colorLine(line)}</div>
+                ))}
+              </div>
+            )}
+          </div>
+          {showJumpDown && (
+            <button
+              onClick={jumpToBottom}
+              className="absolute bottom-4 right-4 flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-white shadow-lg transition-colors hover:bg-primary/90"
+              title="Jump to latest logs"
+            >
+              <span className="material-symbols-outlined text-sm">south</span>
+              Latest
+            </button>
           )}
         </div>
       </Card>
