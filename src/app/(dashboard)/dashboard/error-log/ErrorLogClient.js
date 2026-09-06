@@ -212,9 +212,12 @@ export default function ErrorLogClient() {
               Clear filters
             </Button>
             <Button
-              variant="danger"
+              variant="outline"
+              size="sm"
+              icon="delete_sweep"
               onClick={handleClearLogs}
-              disabled={clearing}
+              disabled={clearing || pagination.totalItems === 0}
+              className="border-red-500/30 text-red-500 hover:bg-red-500/10 hover:text-red-600"
             >
               {clearing ? "Clearing…" : "Clear all logs"}
             </Button>
