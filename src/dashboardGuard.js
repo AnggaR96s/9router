@@ -191,6 +191,16 @@ function isPublicApi(pathname) {
   return PUBLIC_API_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+// The models listing is metadata only (model ids/names) — allow read-only
+// GET access without an API key so tools like Claude Code can discover
+// models before their first authenticated request. Everything else under
+// /v1 stays behind the key gate.
+function isPublicModelsListing(request) {
+  if (request.method !== "GET") return false;
+  const { pathname } = request.nextUrl;
+  return /^\/(?:api\/)?v1(?:beta)?\/models(?:\/|$)/.test(pathname);
+}
+
 export const __test__ = {
   isLocalRequest,
   isPublicLlmApi,
@@ -218,6 +228,7 @@ export async function proxy(request) {
 
   if (isPublicLlmApi(pathname)) {
     if (request.method === "OPTIONS") return NextResponse.next();
+    if (isPublicModelsListing(request)) return NextResponse.next();
     if (await canAccessPublicLlmApi(request)) return NextResponse.next();
     return NextResponse.json({ error: "API key required for remote API access" }, { status: 401 });
   }

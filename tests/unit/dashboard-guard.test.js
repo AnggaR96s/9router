@@ -33,6 +33,10 @@ vi.mock("@/lib/auth/dashboardSession", () => ({
   verifyDashboardAuthToken: mocks.verifyDashboardAuthToken,
 }));
 
+vi.mock("@/lib/auth/trustedPeer", () => ({
+  hasTrustedPeerHeaders: vi.fn(() => true),
+}));
+
 const { proxy, __test__ } = await import("../../src/dashboardGuard.js");
 
 const PEER_TOKEN = "peer-token-fixture";
@@ -40,6 +44,7 @@ const PEER_TOKEN = "peer-token-fixture";
 function request(pathname, headers = {}) {
   const normalizedHeaders = new Headers(headers);
   return {
+    method: "GET",
     nextUrl: { pathname, searchParams: new URL(`http://localhost${pathname}`).searchParams },
     headers: normalizedHeaders,
     cookies: { get: vi.fn(() => undefined) },
@@ -104,15 +109,27 @@ describe("dashboard guard public LLM API access", () => {
     expect(mocks.validateApiKey).not.toHaveBeenCalled();
   });
 
-  it("rejects remote beta public LLM API without API key", async () => {
+  it("allows remote beta models listing without API key (public metadata)", async () => {
     const response = await proxy(request("/v1beta/models", { host: "router.example.com" }));
 
-    expect(response.status).toBe(401);
-    expect(response.body.error).toBe("API key required for remote API access");
+    expect(response).toBe(mocks.nextResponse);
+    expect(mocks.validateApiKey).not.toHaveBeenCalled();
   });
 
-  it("rejects remote rewritten beta public LLM API without API key", async () => {
+  it("allows remote rewritten beta models listing without API key", async () => {
     const response = await proxy(request("/api/v1beta/models", { host: "router.example.com" }));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
+  it("rejects non-GET models listing without API key", async () => {
+    const response = await proxy({
+      method: "POST",
+      nextUrl: { pathname: "/v1/models", searchParams: new URL("http://localhost/v1/models").searchParams },
+      headers: new Headers({ host: "router.example.com" }),
+      cookies: { get: vi.fn(() => undefined) },
+      url: "http://localhost/v1/models",
+    });
 
     expect(response.status).toBe(401);
     expect(response.body.error).toBe("API key required for remote API access");
@@ -183,7 +200,7 @@ describe("dashboard guard public LLM API access", () => {
   it("allows remote rewritten beta public LLM API with valid API key", async () => {
     mocks.validateApiKey.mockResolvedValue(true);
 
-    const response = await proxy(request("/api/v1beta/models", {
+    const response = await proxy(request("/api/v1beta/chat/completions", {
       host: "router.example.com",
       "x-api-key": "sk-valid",
     }));
@@ -195,7 +212,7 @@ describe("dashboard guard public LLM API access", () => {
   it("allows remote beta public LLM API with valid Google API key header", async () => {
     mocks.validateApiKey.mockResolvedValue(true);
 
-    const response = await proxy(request("/v1beta/models", {
+    const response = await proxy(request("/v1beta/chat/completions", {
       host: "router.example.com",
       "x-goog-api-key": "sk-valid",
     }));
