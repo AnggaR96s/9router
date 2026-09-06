@@ -7,6 +7,33 @@
 .material-symbols-outlined { opacity: 0; }
 .fonts-loaded .material-symbols-outlined { opacity: 1; transition: opacity .12s ease-out; }
 
+/* Monochrome provider logos (dark glyphs on transparent bg) — flip to white
+   on dark theme so they stay visible; light theme keeps the original dark
+   glyph. Matches both plain <img> (ProviderIcon) and next/image optimized
+   URLs (encoded %2F path). */
+.dark img[src*="providers/featherless.png"],
+.dark img[src*="providers%2Ffeatherless.png"],
+.dark img[src*="providers/venice.png"],
+.dark img[src*="providers%2Fvenice.png"],
+.dark img[src*="providers/vercel.png"],
+.dark img[src*="providers%2Fvercel.png"],
+.dark img[src*="providers/vercel-ai-gateway.png"],
+.dark img[src*="providers%2Fvercel-ai-gateway.png"],
+.dark img[src*="providers/openrouter.png"],
+.dark img[src*="providers%2Fopenrouter.png"],
+.dark img[src*="providers/jcode.png"],
+.dark img[src*="providers%2Fjcode.png"],
+.dark img[src*="providers/tavily.png"],
+.dark img[src*="providers%2Ftavily.png"],
+.dark img[src*="providers/xquik.png"],
+.dark img[src*="providers%2Fxquik.png"],
+.dark img[src*="providers/ollama-search.png"],
+.dark img[src*="providers%2Follama-search.png"],
+.dark img[src*="providers/elevenlabs.png"],
+.dark img[src*="providers%2Felevenlabs.png"] {
+  filter: invert(1);
+}
+
 /* ============================================================
    9Router palette — adopted from 9remote_private/web
    Brand orange (dark) / soft coral (light), neutral warm bases
