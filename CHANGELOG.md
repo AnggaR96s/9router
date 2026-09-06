@@ -1,3 +1,8 @@
+# v0.1.4 (2026-09-06)
+
+## Fixes
+- **Combo**: revert empty-stream model fallback introduced in a helper commit — an empty upstream stream now moves to the next model directly (as before), and the orphan regression test is removed
+
 # v0.1.3 (2026-09-06)
 
 ## Features
