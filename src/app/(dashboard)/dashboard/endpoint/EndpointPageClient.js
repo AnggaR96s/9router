@@ -17,11 +17,25 @@ import EndpointRow from "./components/EndpointRow";
 import StatusAlert from "./components/StatusAlert";
 import Tooltip from "./components/Tooltip";
 import SecurityWarning from "./components/SecurityWarning";
+
+function formatTokensNumber(num) {
+  if (!num || num <= 0) return "0";
+  if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(2) + "B";
+  if (num >= 1_000_000) return (num / 1_000_000).toFixed(2) + "M";
+  if (num >= 1_000) return (num / 1_000).toFixed(1) + "K";
+  return num.toLocaleString();
+}
+
 export default function APIPageClient({ machineId }) {
   const [keys, setKeys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
+  const [newKeyLimit, setNewKeyLimit] = useState("");
+  const [newKeyReset, setNewKeyReset] = useState("never");
+  const [editingKey, setEditingKey] = useState(null);
+  const [editLimit, setEditLimit] = useState("");
+  const [editReset, setEditReset] = useState("never");
   const [createdKey, setCreatedKey] = useState(null);
   const [confirmState, setConfirmState] = useState(null);
 
@@ -629,7 +643,11 @@ export default function APIPageClient({ machineId }) {
       const res = await fetch("/api/keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newKeyName }),
+        body: JSON.stringify({
+          name: newKeyName,
+          tokenLimit: newKeyLimit ? Number(newKeyLimit) : 0,
+          resetInterval: newKeyReset,
+        }),
       });
       const data = await res.json();
 
@@ -637,11 +655,43 @@ export default function APIPageClient({ machineId }) {
         setCreatedKey(data.key);
         await fetchData();
         setNewKeyName("");
+        setNewKeyLimit("");
+        setNewKeyReset("never");
         setShowAddModal(false);
       }
     } catch (error) {
       console.log("Error creating key:", error);
     }
+  };
+
+  const handleUpdateKeyQuota = async (id, data) => {
+    try {
+      const res = await fetch(`/api/keys/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        await fetchData();
+        setEditingKey(null);
+      }
+    } catch (error) {
+      console.log("Error updating key:", error);
+    }
+  };
+
+  const handleManualResetUsage = async (key) => {
+    setConfirmState({
+      title: "Reset Token Usage",
+      message: `Reset used tokens for "${key.name}" back to 0?`,
+      onConfirm: async () => {
+        setConfirmState(null);
+        await handleUpdateKeyQuota(key.id, {
+          usedTokens: 0,
+          lastResetAt: new Date().toISOString(),
+        });
+      },
+    });
   };
 
   const handleDeleteKey = async (id) => {
@@ -1039,11 +1089,44 @@ export default function APIPageClient({ machineId }) {
                   <p className="text-xs text-text-muted mt-1">
                     Created {new Date(key.createdAt).toLocaleDateString()}
                   </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                      Usage: {formatTokensNumber(key.usedTokens)} / {key.tokenLimit > 0 ? formatTokensNumber(key.tokenLimit) + " tokens" : "Unlimited"}
+                    </span>
+                    {key.resetInterval && key.resetInterval !== "never" && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-gray-500/10 text-text-muted">
+                        Reset: every {key.resetInterval}
+                      </span>
+                    )}
+                    {key.tokenLimit > 0 && (key.usedTokens || 0) >= key.tokenLimit && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-red-500/10 text-red-500 font-semibold">
+                        Quota Exceeded
+                      </span>
+                    )}
+                  </div>
                   {key.isActive === false && (
                     <p className="text-xs text-orange-500 mt-1">Paused</p>
                   )}
                 </div>
-                <div className="flex items-center gap-2 self-start sm:self-auto">
+<div className="flex items-center gap-1 sm:gap-2 self-start sm:self-auto">
+                  <button
+                    onClick={() => {
+                      setEditingKey(key);
+                      setEditLimit(key.tokenLimit ? String(key.tokenLimit) : "");
+                      setEditReset(key.resetInterval || "never");
+                    }}
+                    className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary transition-all"
+                    title="Edit key quota"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">edit</span>
+                  </button>
+                  <button
+                    onClick={() => handleManualResetUsage(key)}
+                    className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary transition-all"
+                    title="Reset used tokens to 0"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">restart_alt</span>
+                  </button>
                   <Toggle
                     size="sm"
                     checked={key.isActive ?? true}
@@ -1092,7 +1175,28 @@ export default function APIPageClient({ machineId }) {
             onChange={(e) => setNewKeyName(e.target.value)}
             placeholder="Production Key"
           />
-          <div className="flex gap-2">
+          <Input
+            label="Token Limit (0 for unlimited)"
+            type="number"
+            value={newKeyLimit}
+            onChange={(e) => setNewKeyLimit(e.target.value)}
+            placeholder="e.g. 88000000"
+          />
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-text-main">Auto Reset Interval</label>
+            <select
+              className="w-full bg-white dark:bg-black border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+              value={newKeyReset}
+              onChange={(e) => setNewKeyReset(e.target.value)}
+            >
+              <option value="never">Never reset</option>
+              <option value="5h">Every 5 Hours (5h)</option>
+              <option value="7d">Every 7 Days (7d)</option>
+              <option value="14d">Every 14 Days (14d)</option>
+              <option value="30d">Every 30 Days (30d)</option>
+            </select>
+          </div>
+          <div className="flex gap-2 mt-2">
             <Button onClick={handleCreateKey} fullWidth disabled={!newKeyName.trim()}>
               Create
             </Button>
@@ -1101,6 +1205,58 @@ export default function APIPageClient({ machineId }) {
                 setShowAddModal(false);
                 setNewKeyName("");
               }}
+              variant="ghost"
+              fullWidth
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Key Quota Modal */}
+      <Modal
+        isOpen={!!editingKey}
+        title={`Edit Quota: ${editingKey?.name || ""}`}
+        onClose={() => setEditingKey(null)}
+      >
+        <div className="flex flex-col gap-4">
+          <Input
+            label="Token Limit (0 for unlimited)"
+            type="number"
+            value={editLimit}
+            onChange={(e) => setEditLimit(e.target.value)}
+            placeholder="e.g. 88000000"
+          />
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-text-main">Auto Reset Interval</label>
+            <select
+              className="w-full bg-white dark:bg-black border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+              value={editReset}
+              onChange={(e) => setEditReset(e.target.value)}
+            >
+              <option value="never">Never reset</option>
+              <option value="5h">Every 5 Hours (5h)</option>
+              <option value="7d">Every 7 Days (7d)</option>
+              <option value="14d">Every 14 Days (14d)</option>
+              <option value="30d">Every 30 Days (30d)</option>
+            </select>
+          </div>
+          <div className="flex gap-2 mt-2">
+            <Button
+              onClick={() => {
+                if (!editingKey) return;
+                handleUpdateKeyQuota(editingKey.id, {
+                  tokenLimit: editLimit ? Number(editLimit) : 0,
+                  resetInterval: editReset,
+                });
+              }}
+              fullWidth
+            >
+              Save Changes
+            </Button>
+            <Button
+              onClick={() => setEditingKey(null)}
               variant="ghost"
               fullWidth
             >

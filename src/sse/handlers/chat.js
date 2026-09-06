@@ -68,15 +68,20 @@ export async function handleChat(request, clientRawRequest = null) {
     log.debug("AUTH", "No API key provided (local mode)");
   }
 
-  // Enforce API key if enabled in settings
+  // Enforce API key if provided or if required by settings
   const settings = await getSettings();
-  if (settings.requireApiKey) {
-    if (!apiKey) {
-      log.warn("AUTH", "Missing API key (requireApiKey=true)");
-      return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
-    }
+  if (settings.requireApiKey && !apiKey) {
+    log.warn("AUTH", "Missing API key (requireApiKey=true)");
+    return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
+  }
+
+  if (apiKey) {
     const valid = await isValidApiKey(apiKey);
-    if (!valid) {
+    if (valid === "QUOTA_EXCEEDED") {
+      log.warn("AUTH", "API key quota exceeded");
+      return errorResponse(HTTP_STATUS.TOO_MANY_REQUESTS, "API key token limit exceeded");
+    }
+    if (!valid && settings.requireApiKey) {
       log.warn("AUTH", "Invalid API key (requireApiKey=true)");
       return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
     }
