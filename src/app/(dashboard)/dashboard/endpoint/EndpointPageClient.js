@@ -35,6 +35,7 @@ export default function APIPageClient({ machineId }) {
   const [newKeyReset, setNewKeyReset] = useState("never");
   const [newKeyAllowedModels, setNewKeyAllowedModels] = useState("*");
   const [editingKey, setEditingKey] = useState(null);
+  const [editName, setEditName] = useState("");
   const [editLimit, setEditLimit] = useState("");
   const [editReset, setEditReset] = useState("never");
   const [editAllowedModels, setEditAllowedModels] = useState("*");
@@ -1119,12 +1120,13 @@ export default function APIPageClient({ machineId }) {
                   <button
                     onClick={() => {
                       setEditingKey(key);
+                      setEditName(key.name || "");
                       setEditLimit(key.tokenLimit ? String(key.tokenLimit) : "");
                       setEditReset(key.resetInterval || "never");
                       setEditAllowedModels(key.allowedModels || "*");
                     }}
                     className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary transition-all"
-                    title="Edit key quota"
+                    title="Edit key settings & quota"
                   >
                     <span className="material-symbols-outlined text-[18px]">edit</span>
                   </button>
@@ -1228,13 +1230,19 @@ export default function APIPageClient({ machineId }) {
         </div>
       </Modal>
 
-      {/* Edit Key Quota Modal */}
+      {/* Edit Key Modal */}
       <Modal
         isOpen={!!editingKey}
-        title={`Edit Quota: ${editingKey?.name || ""}`}
+        title={`Edit API Key: ${editingKey?.name || ""}`}
         onClose={() => setEditingKey(null)}
       >
         <div className="flex flex-col gap-4">
+          <Input
+            label="Key Name"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            placeholder="Production Key"
+          />
           <Input
             label="Token Limit (0 for unlimited)"
             type="number"
@@ -1267,6 +1275,7 @@ export default function APIPageClient({ machineId }) {
               onClick={() => {
                 if (!editingKey) return;
                 handleUpdateKeyQuota(editingKey.id, {
+                  name: editName.trim() || editingKey.name,
                   tokenLimit: editLimit ? Number(editLimit) : 0,
                   resetInterval: editReset,
                   allowedModels: editAllowedModels.trim() || "*",
