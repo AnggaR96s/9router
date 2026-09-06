@@ -6,112 +6,9 @@ import { checkFallbackError, formatRetryAfter } from "./accountFallback.js";
 import { unavailableResponse } from "../utils/error.js";
 import { getCapabilitiesForModel } from "../providers/capabilities.js";
 import { extractTextContent } from "../translator/formats/gemini.js";
-import { STREAM_FIRST_CHUNK_TIMEOUT_MS } from "../config/runtimeConfig.js";
 import { saveErrorLog } from "@/lib/usageDb.js";
 
 const ENDPOINT_COMBO = "/v1/chat/completions";
-const SSE_CONTENT_TYPE = "text/event-stream";
-const EMPTY_STREAM_PEEK_MAX_BYTES = 256 * 1024;
-
-function hasSseContent(line) {
-  if (!line.startsWith("data:")) return false;
-  const payload = line.slice(5).trim();
-  if (!payload || payload === "[DONE]") return false;
-
-  let data;
-  try { data = JSON.parse(payload); } catch { return false; }
-
-  const usage = data.usage || data.response?.usage;
-  if (usage && Number(usage.completion_tokens ?? usage.output_tokens ?? usage.candidatesTokenCount ?? 0) > 0) return true;
-
-  const delta = data.choices?.[0]?.delta;
-  if (typeof delta?.content === "string" && delta.content.length > 0) return true;
-  if (typeof delta?.reasoning_content === "string" && delta.reasoning_content.length > 0) return true;
-  if (typeof delta?.reasoning === "string" && delta.reasoning.length > 0) return true;
-  if (delta?.tool_calls?.length || delta?.function_call) return true;
-
-  if (data.type === "content_block_delta") {
-    const blockDelta = data.delta;
-    if (typeof blockDelta?.text === "string" && blockDelta.text.length > 0) return true;
-    if (typeof blockDelta?.partial_json === "string" && blockDelta.partial_json.length > 0) return true;
-    if (typeof blockDelta?.thinking === "string" && blockDelta.thinking.length > 0) return true;
-  }
-  if (data.type === "content_block_start" && data.content_block?.type === "tool_use") return true;
-
-  if (typeof data.type === "string" && data.type.endsWith(".delta") && data.delta != null) return true;
-  const parts = data.candidates?.[0]?.content?.parts;
-  if (Array.isArray(parts) && parts.some((part) => part?.text || part?.functionCall || part?.inlineData)) return true;
-  if (typeof data.message?.content === "string" && data.message.content.length > 0) return true;
-  if (typeof data.response === "string" && data.response.length > 0) return true;
-  if (data.message?.tool_calls?.length) return true;
-
-  return false;
-}
-
-async function peekSseResponse(response, timeoutMs = STREAM_FIRST_CHUNK_TIMEOUT_MS) {
-  const contentType = response.headers.get("content-type")?.toLowerCase() || "";
-  if (!contentType.includes(SSE_CONTENT_TYPE) || !response.body) return { hasContent: true, body: null };
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  const chunks = [];
-  let bufferedText = "";
-  let byteCount = 0;
-  let done = false;
-  let hasContent = false;
-  let timer;
-  const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve({ timedOut: true }), timeoutMs); });
-
-  try {
-    while (!hasContent && !done) {
-      const result = await Promise.race([reader.read(), timeout]);
-      if (result?.timedOut) break;
-      done = result.done;
-      if (done) {
-        bufferedText += decoder.decode();
-        hasContent = bufferedText.split(/\\r?\\n/).some((line) => hasSseContent(line.trim()));
-        break;
-      }
-      chunks.push(result.value);
-      byteCount += result.value.byteLength;
-      bufferedText += decoder.decode(result.value, { stream: true });
-      let newline;
-      while ((newline = bufferedText.indexOf("\\n")) !== -1) {
-        const line = bufferedText.slice(0, newline).trim();
-        bufferedText = bufferedText.slice(newline + 1);
-        if (hasSseContent(line)) { hasContent = true; break; }
-      }
-      if (byteCount >= EMPTY_STREAM_PEEK_MAX_BYTES) hasContent = true;
-    }
-  } catch {
-    hasContent = false;
-  } finally {
-    clearTimeout(timer);
-  }
-
-  if (!hasContent) {
-    await reader.cancel().catch(() => {});
-    return { hasContent: false, body: null };
-  }
-
-  const replayBody = new ReadableStream({
-    start(controller) {
-      for (const chunk of chunks) controller.enqueue(chunk);
-      chunks.length = 0;
-      if (done) controller.close();
-    },
-    async pull(controller) {
-      if (done) return;
-      try {
-        const next = await reader.read();
-        if (next.done) { done = true; controller.close(); return; }
-        controller.enqueue(next.value);
-      } catch (error) { controller.error(error); }
-    },
-    cancel(reason) { reader.cancel(reason).catch(() => {}); },
-  });
-  return { hasContent: true, body: replayBody };
-}
 
 // Hard capabilities = input modalities; missing one drops request data (e.g. image
 // stripped). Must be prioritized. Soft (e.g. search) only degrades a feature.
@@ -410,17 +307,10 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
     try {
       const result = await handleSingleModel(body, modelStr);
       
+      // Success (2xx) - return response
       if (result.ok) {
-        const { hasContent, body: replayBody } = await peekSseResponse(result);
-        if (!hasContent) {
-          lastError = "provider returned an empty stream";
-          if (!lastStatus) lastStatus = 503;
-          log.warn("COMBO", `Model ${modelStr} returned an empty stream, trying next`);
-          continue;
-        }
         log.info("COMBO", `Model ${modelStr} succeeded`);
-        if (!replayBody) return result;
-        return new Response(replayBody, { status: result.status, statusText: result.statusText, headers: result.headers });
+        return result;
       }
 
       // Extract error info from response
