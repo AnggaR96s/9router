@@ -1,3 +1,8 @@
+# v0.1.5 (2026-09-06)
+
+## Fixes
+- **Freebuff**: bounded wait now parses ISO-string `retryAfter` from auth.js (`getEarliestModelLockUntil`) — previously the single-account wait never triggered because `"ISO-string" - Date.now()` is `NaN`, so requests still failed fast with 429 instead of waiting out the pacing gap
+
 # v0.1.4 (2026-09-06)
 
 ## Fixes
