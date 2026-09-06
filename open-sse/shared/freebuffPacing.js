@@ -12,7 +12,11 @@
 // hashed here — never stored, never logged.
 
 const FB_PACING_KEY = "__9routerFreebuffPacing__";
-const DEFAULT_PACING_GAP_MS = 35 * 1000;
+// 20s min idle gap per account — closer to a human's natural cadence than the
+// 35s we used before (which was tuned for multi-account farms). With
+// single-account use the bounded wait in chat.js absorbs the remainder.
+const DEFAULT_PACING_GAP_MS = 20 * 1000;
+const DEFAULT_MAX_WAIT_MS = 30 * 1000;
 
 function pacingState() {
   return (globalThis[FB_PACING_KEY] ??= {
@@ -34,6 +38,28 @@ export function hashFreebuffToken(token) {
 export function getFreebuffPacingGapMs() {
   const env = Number(process.env.FREEBUFF_PACING_GAP_MS);
   return Number.isFinite(env) && env > 0 ? env : DEFAULT_PACING_GAP_MS;
+}
+
+// Upper bound for the single-account bounded wait (chat.js). When every
+// Freebuff account is pacing/model-locked and the earliest lock resolves
+// within this window, the handler waits it out instead of failing the
+// request with 429 — there is nobody to fall back to with one account.
+export function getFreebuffMaxWaitMs() {
+  const env = Number(process.env.FREEBUFF_MAX_WAIT_MS);
+  return Number.isFinite(env) && env > 0 ? env : DEFAULT_MAX_WAIT_MS;
+}
+
+/**
+ * How long the handler should wait before retrying the same account.
+ * Returns 0 when there is nothing to wait for, the lock is already expired,
+ * or the wait would exceed the bounded max (fail fast instead).
+ */
+export function computeFreebuffWaitMs(retryAfterMs, nowMs = Date.now()) {
+  if (!retryAfterMs) return 0;
+  const waitMs = retryAfterMs - nowMs;
+  if (waitMs <= 0) return 0;
+  const max = getFreebuffMaxWaitMs();
+  return waitMs <= max ? waitMs : 0;
 }
 
 /** Milliseconds until the next allowed request for this token (0 = allowed now). */

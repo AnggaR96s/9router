@@ -25,6 +25,7 @@ import { updateProviderCredentials, checkAndRefreshToken } from "../services/tok
 import { getProjectIdForConnection } from "open-sse/services/projectId.js";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
 import { saveErrorLog } from "@/lib/usageDb.js";
+import { computeFreebuffWaitMs } from "open-sse/shared/freebuffPacing.js";
 
 /**
  * Handle chat completion request
@@ -237,6 +238,21 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
+        // Freebuff-only bounded wait. With a single account (or every account
+        // pacing/model-locked), waiting out the shortest lock beats failing the
+        // request with 429 — there is nobody to fall back to. Other providers
+        // keep the fail-fast behavior below.
+        if (provider === "freebuff") {
+          const waitMs = computeFreebuffWaitMs(credentials.retryAfter);
+          if (waitMs > 0) {
+            log.info("CHAT", `[${provider}/${model}] all accounts locked — waiting ${Math.ceil(waitMs / 1000)}s to retry same account`);
+            await new Promise((resolve) => setTimeout(resolve, waitMs));
+            // Drop accumulated excludes so the same account can serve again now
+            // that its pacing gap + model lock have elapsed.
+            excludeConnectionIds.clear();
+            continue;
+          }
+        }
         const errorMsg = lastError || credentials.lastError || "Unavailable";
         const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
         log.warn("CHAT", `[${provider}/${model}] ${errorMsg} (${credentials.retryAfterHuman})`);
