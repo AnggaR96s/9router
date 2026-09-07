@@ -1,11 +1,36 @@
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 import { v4 as uuidv4 } from "uuid";
+import { AI_PROVIDERS, resolveProviderId } from "@/shared/constants/providers.js";
 
 const DEFAULT_MAX_RECORDS = 200;
 const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_FLUSH_INTERVAL_MS = 5000;
 const DEFAULT_MAX_JSON_SIZE = 5 * 1024;
+
+/**
+ * Expand a provider filter to every stored representation that could match:
+ * canonical id, alias(es), uiAlias, display name, plus the raw input itself
+ * (covers custom ids like openai-compatible-chat-<uuid>). Case-insensitive on
+ * both sides, so "Freebuff", "fb" and "Token Harbor" all resolve correctly.
+ */
+export function expandProviderFilter(input) {
+  const raw = String(input == null ? "" : input).trim();
+  if (!raw) return [];
+  const lower = raw.toLowerCase();
+  const values = new Set([raw]);
+  for (const p of Object.values(AI_PROVIDERS)) {
+    const keys = [p.id, p.alias, p.uiAlias, p.name, ...(p.aliases || [])]
+      .filter(Boolean)
+      .map((s) => String(s));
+    if (keys.some((k) => k.toLowerCase() === lower)) {
+      if (p.id) values.add(p.id);
+      if (p.alias) values.add(p.alias);
+      for (const a of p.aliases || []) values.add(a);
+    }
+  }
+  return [...values];
+}
 
 let writeBuffer = [];
 let flushTimer = null;
@@ -29,7 +54,7 @@ export async function saveErrorLog(entry) {
     id,
     timestamp,
     endpoint: entry.endpoint || null,
-    provider: entry.provider || null,
+    provider: entry.provider ? resolveProviderId(entry.provider) : null,
     model: entry.model || null,
     connectionId: entry.connectionId || null,
     comboName: entry.comboName || null,
@@ -92,7 +117,17 @@ export async function getErrorLogs(filter = {}) {
   const conds = [];
   const params = [];
 
-  if (filter.provider) { conds.push("provider = ?"); params.push(filter.provider); }
+  if (filter.provider) {
+    const expanded = expandProviderFilter(filter.provider);
+    if (expanded.length > 0) {
+      conds.push(`provider IN (${expanded.map(() => "?").join(",")})`);
+      params.push(...expanded);
+    } else {
+      // Non-provider-looking filter (exact raw value still applied)
+      conds.push("provider = ?");
+      params.push(filter.provider);
+    }
+  }
   if (filter.model) { conds.push("model = ?"); params.push(filter.model); }
   if (filter.connectionId) { conds.push("connectionId = ?"); params.push(filter.connectionId); }
   if (filter.comboName) { conds.push("comboName = ?"); params.push(filter.comboName); }
