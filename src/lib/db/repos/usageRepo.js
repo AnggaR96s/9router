@@ -302,12 +302,15 @@ export async function saveRequestUsage(entry) {
       const next = (cur ? parseInt(cur.value, 10) : 0) + 1;
       db.run(`INSERT INTO _meta(key, value) VALUES('totalRequestsLifetime', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [String(next)]);
 
-      // Update API Key usedTokens
+      // Update API Key usedTokens and sliding window
       if (entry.apiKey) {
          const totalTokens = promptTokens + completionTokens;
          if (totalTokens > 0) {
             db.run(`UPDATE apiKeys SET usedTokens = COALESCE(usedTokens, 0) + ? WHERE key = ?`, [totalTokens, entry.apiKey]);
          }
+         import("./apiKeysRepo.js").then(({ recordApiKeyUsageInWindow }) => {
+           recordApiKeyUsageInWindow(entry.apiKey, totalTokens);
+         }).catch(() => {});
       }
 
       inserted = true;

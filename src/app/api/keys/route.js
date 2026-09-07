@@ -19,7 +19,7 @@ export async function GET() {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { name, tokenLimit, resetInterval, allowedModels } = body;
+    const { name, tokenLimit, resetInterval, allowedModels, rpmLimit, tpmLimit } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -31,6 +31,8 @@ export async function POST(request) {
       tokenLimit: tokenLimit !== undefined ? Number(tokenLimit) : 0,
       resetInterval: resetInterval || "never",
       allowedModels: allowedModels || "*",
+      rpmLimit: rpmLimit !== undefined ? Number(rpmLimit) : 0,
+      tpmLimit: tpmLimit !== undefined ? Number(tpmLimit) : 0,
     });
 
     return NextResponse.json({
@@ -43,6 +45,8 @@ export async function POST(request) {
       resetInterval: apiKey.resetInterval,
       lastResetAt: apiKey.lastResetAt,
       allowedModels: apiKey.allowedModels,
+      rpmLimit: apiKey.rpmLimit,
+      tpmLimit: apiKey.tpmLimit,
     }, { status: 201 });
   } catch (error) {
     console.log("Error creating key:", error);

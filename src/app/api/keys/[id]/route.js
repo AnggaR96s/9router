@@ -36,6 +36,8 @@ export async function PUT(request, { params }) {
     if (body.usedTokens !== undefined) updateData.usedTokens = Number(body.usedTokens);
     if (body.lastResetAt !== undefined) updateData.lastResetAt = body.lastResetAt;
     if (body.allowedModels !== undefined) updateData.allowedModels = body.allowedModels;
+    if (body.rpmLimit !== undefined) updateData.rpmLimit = Number(body.rpmLimit);
+    if (body.tpmLimit !== undefined) updateData.tpmLimit = Number(body.tpmLimit);
 
     const updated = await updateApiKey(id, updateData);
 
