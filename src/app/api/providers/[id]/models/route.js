@@ -15,6 +15,7 @@ import { fetchTokenharborModels } from "./tokenharbor.js";
 import { fetchNousModels } from "./nous.js";
 import { fetchOrcarouterModels } from "./orcarouter.js";
 import { resolveCursorModels } from "open-sse/services/cursorModels.js";
+import { normalizeDiscoveredModels } from "@/shared/utils/modelTokenLimits";
 
 const GEMINI_CLI_MODELS_URL = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels";
 
@@ -518,7 +519,7 @@ export async function GET(request, { params }) {
       }
 
       const data = await response.json();
-      const models = data.data || data.models || [];
+      const models = normalizeDiscoveredModels(data.data || data.models || []);
 
       return NextResponse.json({
         provider: connection.provider,
@@ -559,7 +560,7 @@ export async function GET(request, { params }) {
       }
 
       const data = await response.json();
-      const models = data.data || data.models || [];
+      const models = normalizeDiscoveredModels(data.data || data.models || []);
 
       return NextResponse.json({
         provider: connection.provider,
@@ -585,7 +586,7 @@ export async function GET(request, { params }) {
       return NextResponse.json({
         provider: connection.provider,
         connectionId: connection.id,
-        models: result.models,
+        models: normalizeDiscoveredModels(result.models),
         ...(result.warning ? { warning: result.warning } : {})
       });
     }
@@ -630,7 +631,7 @@ export async function GET(request, { params }) {
     }
 
     const data = await response.json();
-    const models = config.parseResponse(data);
+    const models = normalizeDiscoveredModels(config.parseResponse(data));
 
     return NextResponse.json({
       provider: connection.provider,
