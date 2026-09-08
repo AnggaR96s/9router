@@ -497,7 +497,7 @@ describe("freebuff run registration", () => {
     expect(rootAgentIdForModel("mimo/mimo-v2.5")).toBe("base3-free-mimo");
     expect(rootAgentIdForModel("openai/gpt-5.6-luna")).toBe("base3-free-luna");
     expect(rootAgentIdForModel("upstage/solar-pro4")).toBe("base3-free-solar-pro4");
-    expect(rootAgentIdForModel("meta/muse-spark-1.3-contributor")).toBe("base3-free-muse-spark-1-3");
+    expect(rootAgentIdForModel("meta/muse-spark-1.2-contributor")).toBe("base3-free-muse-spark");
     expect(rootAgentIdForModel("anthropic/claude-fable-5")).toBe("base3-free-fable");
     // Withdrawn upstream models are unmapped — they fall back, and the backend
     // refuses their sessions anyway.
@@ -603,8 +603,13 @@ describe("freebuff executor execute", () => {
 
     expect(response.status).toBe(200);
     expect(chatHits).toBe(2);
-    // Session was claimed twice (initial + forced re-claim).
-    expect(fetchMock.mock.calls.filter(([u]) => u === SESSION_URL).length).toBe(2);
+    // Session touched 3x: initial claim (POST), end-old-session (DELETE),
+    // forced re-claim (POST).
+    expect(fetchMock.mock.calls.filter(([u]) => u === SESSION_URL).length).toBe(3);
+    const sessionMethods = fetchMock.mock.calls
+      .filter(([u]) => u === SESSION_URL)
+      .map(([, o]) => o.method);
+    expect(sessionMethods).toEqual(["POST", "DELETE", "POST"]);
     // Runs: START #1, FINISH(cancelled) #1 (abandoned on 428), START #2,
     // FINISH(completed) #2.
     const runCalls = fetchMock.mock.calls.filter(([u]) => u === RUN_URL);
@@ -639,8 +644,9 @@ describe("freebuff executor execute", () => {
 
     expect(response.status).toBe(200);
     expect(chatHits).toBe(2);
-    // Session re-claimed (initial + forced) and runs restarted.
-    expect(fetchMock.mock.calls.filter(([u]) => u === SESSION_URL).length).toBe(2);
+    // Session touched 3x: claim (POST), end-old (DELETE), re-claim (POST);
+    // runs restarted after the DELETE.
+    expect(fetchMock.mock.calls.filter(([u]) => u === SESSION_URL).length).toBe(3);
     const runCalls = fetchMock.mock.calls.filter(([u]) => u === RUN_URL);
     expect(runCalls.filter((c) => JSON.parse(c[1].body).action === "START").length).toBe(2);
   });

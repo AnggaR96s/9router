@@ -94,7 +94,7 @@ describe("getUsageForProvider(freebuff)", () => {
         status: "active",
         accessTier: "full",
         instanceId: "inst-1",
-        model: "meta/muse-spark-1.3-contributor",
+        model: "meta/muse-spark-1.2-contributor",
         expiresAt: new Date(Date.now() + 3600000).toISOString(),
         rateLimit: {
           limit: 6,
@@ -112,10 +112,10 @@ describe("getUsageForProvider(freebuff)", () => {
     });
 
     expect(usage.plan).toBe("Freebuff");
-    expect(usage.quotas["meta/muse-spark-1.3-contributor"]).toMatchObject({
+    expect(usage.quotas["meta/muse-spark-1.2-contributor"]).toMatchObject({
       used: 2.4,
       total: 6,
-      displayName: "Muse Spark 1.3",
+      displayName: "Muse Spark 1.2",
     });
   });
 

@@ -131,7 +131,7 @@ const FREE_ROOT_AGENT_BY_MODEL = {
   "mimo/mimo-v2.5": "base3-free-mimo",
   "openai/gpt-5.6-luna": "base3-free-luna",
   "upstage/solar-pro4": "base3-free-solar-pro4",
-  "meta/muse-spark-1.3-contributor": "base3-free-muse-spark-1-3",
+  "meta/muse-spark-1.2-contributor": "base3-free-muse-spark",
   "anthropic/claude-fable-5": "base3-free-fable",
 };
 
@@ -834,6 +834,16 @@ export class FreebuffExecutor extends BaseExecutor {
 
         log?.debug?.("AUTH", `Freebuff ${response.status} session gate — re-claiming session`);
         markFinished("cancelled");
+        // End the stale session first (DELETE + early-end refund) so the force
+        // re-claim below starts clean — mirrors the official CLI's
+        // "confirm → DELETE then re-POST with the new model".
+        if (session?.instanceId) {
+          const refund = await endSession(token, session.instanceId, proxyOptions);
+          if (refund?.freebucksRefund !== undefined) {
+            log?.info?.("AUTH", `Freebuff early-end refund ${Number(refund.freebucksRefund) > 0 ? `+${refund.freebucksRefund}` : refund.freebucksRefund} Freebucks (ended session ${session.instanceId.slice(0, 8)})`);
+          }
+        }
+        sessionCache.delete(sessionCacheKey(token, model));
         try {
           session = await ensureSession(token, model, proxyOptions, true);
           runId = await startRun(token, model, proxyOptions);

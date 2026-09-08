@@ -77,14 +77,15 @@ export default {
   // all intentionally omitted. Fable is a capacity-limited WAVE trial: sessions
   // only claim while the backend advertises it via limitedModelOffers on the
   // session status (the executor auto-checks before claiming); the model is
-  // otherwise refused.
+  // otherwise refused. Muse Spark 1.3 was withdrawn 2026-09-07 (404
+  // model_not_found at Meta on every key) and 1.2 took its place.
   models: [
     { id: "z-ai/glm-5.3-flash", name: "GLM 5.3 Flash" },
     { id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash" },
     { id: "openai/gpt-5.6-luna", name: "GPT-5.6 Luna" },
     { id: "mimo/mimo-v2.5", name: "MiMo 2.5" },
     { id: "upstage/solar-pro4", name: "Solar Pro 4" },
-    { id: "meta/muse-spark-1.3-contributor", name: "Muse Spark 1.3" },
+    { id: "meta/muse-spark-1.2-contributor", name: "Muse Spark 1.2" },
     { id: "anthropic/claude-fable-5", name: "Claude Fable 5 (limited offer)" },
   ],
   // Login-flow host — the CLI in freebuff mode logs in via freebuff.com, and
