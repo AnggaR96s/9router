@@ -80,7 +80,7 @@ async function loadActiveConnections() {
 
 async function refreshOne(connection) {
   const { checkAndRefreshToken } = await import("./tokenRefresh.js");
-  return checkAndRefreshToken(connection.provider, connection, { force: true });
+  return checkAndRefreshToken(connection.provider, connection, { force: true, quiet: true });
 }
 
 /**
@@ -103,16 +103,25 @@ export async function runBackgroundTokenRefreshTick(deps = {}) {
     const baseSensitiveDelay = Number(process.env.BG_REFRESH_GOOGLE_DELAY_MS) || 12_000;
     const baseNormalDelay = Number(process.env.BG_REFRESH_DELAY_MS) || 1_500;
 
+    // Per-connection success lines are debug-level: many OAuth accounts would
+    // otherwise flood the console-log buffer (every account refreshes every
+    // tick = every ~5 min, 3 lines each ≈ 200+ lines/hour). A single tick
+    // summary below keeps the signal without the spam; failures log loudly.
+    let refreshed = 0;
+    let failed = 0;
+
     for (let i = 0; i < due.length; i++) {
       const conn = due[i];
       try {
         await refresh(conn);
-        log.info("BG_TOKEN_REFRESH", "Connection refresh finished", {
+        refreshed += 1;
+        log.debug("BG_TOKEN_REFRESH", "Connection refresh finished", {
           id: conn.id,
           email: conn.email || conn.name || conn.id,
           provider: conn.provider,
         });
       } catch (err) {
+        failed += 1;
         log.warn("BG_TOKEN_REFRESH", "Connection refresh failed (swallowed)", {
           id: conn?.id,
           email: conn?.email || conn?.name || conn?.id,
@@ -129,6 +138,11 @@ export async function runBackgroundTokenRefreshTick(deps = {}) {
         await sleep(baseDelay + jitter);
       }
     }
+
+    log.info(
+      "BG_TOKEN_REFRESH",
+      `Refreshed ${refreshed} connection(s)${failed > 0 ? `, ${failed} failed` : ""}`
+    );
   } catch (err) {
     log.warn("BG_TOKEN_REFRESH", "Tick failed (swallowed)", {
       error: err?.message ?? String(err),

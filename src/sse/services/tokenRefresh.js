@@ -158,9 +158,11 @@ function _refreshProjectId(provider, connectionId, accessToken) {
  *
  * @param {string} connectionId
  * @param {object} newCredentials
+ * @param {{ quiet?: boolean }} [options]  quiet=true logs at debug level
+ *   (used by the background scheduler to avoid flooding the console log).
  * @returns {Promise<boolean>}
  */
-export async function updateProviderCredentials(connectionId, newCredentials) {
+export async function updateProviderCredentials(connectionId, newCredentials, options = {}) {
   try {
     const updates = {};
 
@@ -195,10 +197,17 @@ export async function updateProviderCredentials(connectionId, newCredentials) {
     if (newCredentials.projectId)            updates.projectId = newCredentials.projectId;
 
     const result = await updateProviderConnection(connectionId, updates);
-    log.info("TOKEN_REFRESH", "Credentials updated in localDb", {
-      connectionId,
-      success: !!result
-    });
+    if (options.quiet) {
+      log.debug("TOKEN_REFRESH", "Credentials updated in localDb", {
+        connectionId,
+        success: !!result
+      });
+    } else {
+      log.info("TOKEN_REFRESH", "Credentials updated in localDb", {
+        connectionId,
+        success: !!result
+      });
+    }
     return !!result;
   } catch (error) {
     log.error("TOKEN_REFRESH", "Error updating credentials in localDb", {
@@ -228,6 +237,10 @@ export async function checkAndRefreshToken(provider, credentials, options = {}) 
   }
 
   const force = options?.force === true;
+  // Background scheduler passes quiet=true: many OAuth accounts refresh every
+  // tick, and info-level per-account lines would flood the console-log buffer
+  // (~200+ lines/hour). Request-path refreshes stay info-visible.
+  const quiet = options?.quiet === true;
 
   // ── 1. Regular access-token expiry ────────────────────────────────────────
   if (force || _shouldRefreshCredentials(provider, creds)) {
@@ -235,12 +248,21 @@ export async function checkAndRefreshToken(provider, credentials, options = {}) 
     const remaining = expiresAt ? expiresAt - Date.now() : null;
     const refreshLead = _getRefreshLeadMs(provider);
 
-    log.info("TOKEN_REFRESH", "Refreshing provider credentials proactively", {
-      provider,
-      expiresIn: remaining === null ? null : Math.round(remaining / 1000),
-      refreshLeadMs: refreshLead,
-      lastRefreshAt: creds.lastRefreshAt || null,
-    });
+    if (quiet) {
+      log.debug("TOKEN_REFRESH", "Refreshing provider credentials proactively", {
+        provider,
+        expiresIn: remaining === null ? null : Math.round(remaining / 1000),
+        refreshLeadMs: refreshLead,
+        lastRefreshAt: creds.lastRefreshAt || null,
+      });
+    } else {
+      log.info("TOKEN_REFRESH", "Refreshing provider credentials proactively", {
+        provider,
+        expiresIn: remaining === null ? null : Math.round(remaining / 1000),
+        refreshLeadMs: refreshLead,
+        lastRefreshAt: creds.lastRefreshAt || null,
+      });
+    }
 
     const newCreds = await _refreshProviderCredentials(provider, creds, log);
     if (newCreds?.accessToken || newCreds?.apiKey || newCreds?.copilotToken) {
@@ -250,7 +272,7 @@ export async function checkAndRefreshToken(provider, credentials, options = {}) 
       };
 
       // Persist to DB (non-blocking path continues below)
-      await updateProviderCredentials(creds.connectionId, mergedCreds);
+      await updateProviderCredentials(creds.connectionId, mergedCreds, { quiet });
 
       creds = {
         ...creds,
@@ -293,7 +315,7 @@ export async function checkAndRefreshToken(provider, credentials, options = {}) 
 
         await updateProviderCredentials(creds.connectionId, {
           providerSpecificData: updatedSpecific,
-        });
+        }, { quiet });
 
         creds.providerSpecificData = updatedSpecific;
         creds.copilotToken = copilotTokenResult.token;
