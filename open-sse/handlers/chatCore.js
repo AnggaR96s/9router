@@ -22,6 +22,8 @@ import { detectClientTool, isNativePassthrough } from "../utils/clientDetector.j
 import { dedupeTools } from "../utils/toolDeduper.js";
 import { injectCaveman } from "../rtk/caveman.js";
 import { injectPonytail } from "../rtk/ponytail.js";
+import { pruneContextMessages } from "../rtk/contextPruning.js";
+import { checkSemanticCache, saveToSemanticCache } from "../rtk/semanticCache.js";
 import { compressMessages, formatRtkLog } from "../rtk/index.js";
 import { compressWithHeadroom, formatHeadroomLog, formatHeadroomSizeLog, isHeadroomPhantomSavings } from "../rtk/headroom.js";
 import { compressWithPxpipe } from "../rtk/pxpipe.js";
@@ -58,7 +60,7 @@ export function stripContinuityFields(body) {
   return body;
 }
 
-export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking }) {
+export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, contextPruningEnabled, maxMessagesLimit, semanticCacheEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking }) {
   const { provider, model } = modelInfo;
   const requestStartTime = Date.now();
   // Stable per-session color so all lines of one CLI conversation share a tag
@@ -76,6 +78,20 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // Check for bypass patterns (warmup, skip, cc naming)
   const bypassResponse = handleBypassRequest(body, model, userAgent, ccFilterNaming);
   if (bypassResponse) return bypassResponse;
+
+  // Check Semantic / Duplicate Prompt Cache (for non-streaming requests)
+  if (semanticCacheEnabled && !body.stream) {
+    const cachedResponse = checkSemanticCache(body, `${provider}/${model}`);
+    if (cachedResponse) {
+      log?.info?.("CACHE", `⚡ Instant semantic cache hit for ${provider}/${model}`);
+      return {
+        success: true,
+        response: new Response(JSON.stringify(cachedResponse), {
+          headers: { "Content-Type": "application/json", "X-9Router-Cache": "HIT" },
+        }),
+      };
+    }
+  }
 
   const alias = PROVIDER_ID_TO_ALIAS[provider] || provider;
   const modelTargetFormat = getModelTargetFormat(alias, model);
@@ -269,6 +285,12 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   // Token-saver flags accumulator for the single "⚙" log line below.
   const xf = [];
+
+  // Context Pruning: keep system prompt and most recent messages
+  if (tokenSaverEnabled && contextPruningEnabled) {
+    pruneContextMessages(translatedBody, maxMessagesLimit || 20);
+    xf.push(`PRUNING:${maxMessagesLimit || 20}msgs`);
+  }
 
   // Caveman: inject terse-style system prompt
   if (tokenSaverEnabled && cavemanEnabled && cavemanLevel) {

@@ -291,6 +291,8 @@ export default function CombosPage() {
 const STRATEGY_OPTIONS = [
   { value: "fallback", label: "Fallback — try in order" },
   { value: "round-robin", label: "Round Robin — rotate" },
+  { value: "fastest", label: "Fastest — lowest latency" },
+  { value: "cheapest", label: "Cheapest — lowest cost" },
   { value: "fusion", label: "Fusion — panel + judge" },
 ];
 
