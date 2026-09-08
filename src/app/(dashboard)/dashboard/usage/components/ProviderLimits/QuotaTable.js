@@ -178,6 +178,11 @@ export default function QuotaTable({
                       title={quota.priceNote || ""}
                     >
                       {formatFreebucksPrice(quota.price)}
+                      {quota.peak ? (
+                        <span className="ml-1 rounded bg-amber-500/20 px-1 py-px font-semibold text-amber-600 dark:text-amber-400" title={quota.priceNote || `Peak pricing: +${quota.peakSurcharge ?? 0} Freebucks a session while the provider charges double, back later.`}>
+                          Peak pricing
+                        </span>
+                      ) : null}
                       {quota.priceNote ? ` · ${quota.priceNote}` : ""}
                     </div>
                   )}

@@ -160,6 +160,17 @@ export async function getFreebuffUsage(accessToken, providerSpecificData, proxyO
           recurring: true,
           price: Number.isFinite(Number(price)) ? Number(price) : undefined,
           ...(freebucks.priceNotices?.[model] ? { priceNote: freebucks.priceNotices[model] } : {}),
+          // Peak surcharge (e.g. DeepSeek 2x during expensive hours) — server
+          // sends peak.modelIds + surcharge + endsAt; the base price already
+          // reflected it (server prices), so the row is flagged so the UI can
+          // show the badge instead of a misleading base rate.
+          ...(freebucks.peak?.modelIds?.includes(model)
+            ? {
+                peak: true,
+                peakSurcharge: freebucks.peak.surcharge,
+                peakEndsAt: freebucks.peak.endsAt || null,
+              }
+            : {}),
           ...(MODEL_LABELS[model] ? { displayName: MODEL_LABELS[model] } : {}),
         };
       }
@@ -174,6 +185,9 @@ export async function getFreebuffUsage(accessToken, providerSpecificData, proxyO
         wallet: {
           balance: Number.isFinite(Number(freebucks.wallet?.balance)) ? Number(freebucks.wallet.balance) : 0,
         },
+        // Server-authorized quota exemption: new sessions remain usable at zero
+        // balance (mirrors getFreebucksModelMeter canStart).
+        ...(freebucks.quotaExempt === true ? { quotaExempt: true } : {}),
         ...(freebucks.monthly && Number.isFinite(Number(freebucks.monthly.remainingUsd))
           ? {
               monthly: {

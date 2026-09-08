@@ -297,18 +297,32 @@ async function requestSession(token, model, proxyOptions) {
   let data = {};
   try { data = await response.json(); } catch { data = {}; }
 
+  const status = data?.status;
+  // Mirror the CLI's callFreebuffSession: gate statuses ride non-2xx POST
+  // responses with a parseable body — 403 → country_blocked/banned, 409 →
+  // model_locked/model_unavailable, 429 → rate_limited/spend_limited/ip_capped.
+  // Passing those through (instead of throwing a generic HTTP error) lets the
+  // status handlers below classify and cooldown correctly.
+  const knownGateStatuses = new Set([
+    "country_blocked", "banned", "model_locked", "model_unavailable",
+    "rate_limited", "spend_limited", "ip_capped",
+  ]);
   if (response.status === 401) {
     const err = new Error("Freebuff session auth failed (401) — re-login in the dashboard");
     err.status = 401;
     throw err;
   }
-  if (!response.ok) {
+  if (!response.ok && !knownGateStatuses.has(status)) {
     const err = new Error(`Freebuff session request failed: ${response.status} ${JSON.stringify(data).slice(0, 200)}`);
     err.status = response.status;
     throw err;
   }
+  // 404 = no session row at all → pre-join state, proceed unsessioned (the
+  // chat 428 tells us if the admission gate actually requires one).
+  if (response.status === 404) {
+    return { instanceId: null, status: "none" };
+  }
 
-  const status = data?.status;
   if (status === "active") {
     const parsedExp = Date.parse(data.expiresAt || "");
     const entry = {
@@ -357,6 +371,9 @@ async function requestSession(token, model, proxyOptions) {
   };
   if (GATE_MESSAGES[status]) {
     const err = new Error(data?.message ? `${GATE_MESSAGES[status]} ${data.message}` : GATE_MESSAGES[status]);
+    if (data?.freebucksShortfall) {
+      err.freebucksShortfall = data.freebucksShortfall; // { price, balance }
+    }
     // Freebucks / session-allowance exhaustion is a hard stop until the daily
     // Pacific reset — mark the account unavailable until then so accountFallback
     // SKIPS it for the rest of the day instead of retrying every 30s and getting
@@ -450,6 +467,38 @@ async function guardOfferClaim(token, model, proxyOptions) {
     throw err;
   }
   return offer;
+}
+
+// Best-effort session teardown — mirrors the CLI's DELETE /session which
+// returns the early-end refund receipt (freebucksRefund). Never throws.
+// Only meaningful for an active session with an instance id; a session that
+// already ended (or was swept) needs no DELETE.
+export async function endSession(token, instanceId, proxyOptions = null) {
+  if (!instanceId) return null;
+  try {
+    const res = await fetchWithNetworkRetry(`${sessionOrigin()}${SESSION_PATH}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "User-Agent": "Bun/1.3.14",
+        "x-freebuff-instance-id": instanceId,
+      },
+    }, proxyOptions);
+    if (res.status === 401) {
+      const err = new Error("Freebuff session auth failed (401) — re-login in the dashboard");
+      err.status = 401;
+      throw err;
+    }
+    if (!res.ok) {
+      // End-session is best-effort; a refusal (e.g. session already swept)
+      // is not worth failing the caller over.
+      return null;
+    }
+    const data = await res.json().catch(() => ({}));
+    return Number.isFinite(Number(data?.freebucksRefund)) ? data : null;
+  } catch {
+    return null; // best-effort only — the server sweeps stale sessions
+  }
 }
 
 async function ensureSession(token, model, proxyOptions, force = false) {
@@ -844,6 +893,7 @@ export const __test__ = {
   ensureSession,
   requestSession,
   startRun,
+  endSession,
   resetSessionCache,
   rootAgentIdForModel,
   injectFreebuffMarker,

@@ -676,6 +676,7 @@ export function parseQuotaData(provider, data) {
               recurring: quota.recurring !== false,
               price: quota.price,
               priceNote: quota.priceNote,
+              ...(quota.peak ? { peak: true, peakSurcharge: quota.peakSurcharge, peakEndsAt: quota.peakEndsAt } : {}),
             });
           });
         }

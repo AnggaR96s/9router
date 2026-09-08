@@ -13,6 +13,7 @@ const {
   ensureSession,
   requestSession,
   startRun,
+  endSession,
   resetSessionCache,
   rootAgentIdForModel,
   injectFreebuffMarker,
@@ -434,6 +435,26 @@ describe("freebuff limited-offer (Claude Fable 5) claims", () => {
     await expect(ensureSession("tok-1", FABLE, null)).rejects.toThrow(/not being offered right now/i);
     const methods = fetchMock.mock.calls.map(([, o]) => o.method);
     expect(methods).toEqual(["GET"]);
+  });
+
+  it("endSession DELETEs the session with the instance header and returns the refund", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ freebucksRefund: 3.2 }));
+    const result = await endSession("tok-1", "inst-1", null);
+    expect(result).not.toBeNull();
+    expect(result.freebucksRefund).toBe(3.2);
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://www.codebuff.com/api/v1/freebuff/session");
+    expect(opts.method).toBe("DELETE");
+    expect(opts.headers["x-freebuff-instance-id"]).toBe("inst-1");
+    expect(opts.headers.Authorization).toBe("Bearer tok-1");
+  });
+
+  it("endSession is best-effort: no instance id, non-ok, or error → null", async () => {
+    expect(await endSession("tok-1", null, null)).toBeNull();
+    fetchMock.mockResolvedValue(jsonResponse({}, { status: 409, ok: false }));
+    expect(await endSession("tok-1", "inst-x", null)).toBeNull();
+    fetchMock.mockRejectedValue(new Error("boom"));
+    expect(await endSession("tok-1", "inst-y", null)).toBeNull();
   });
 });
 

@@ -216,6 +216,44 @@ describe("getUsageForProvider(freebuff)", () => {
     });
   });
 
+  it("flags peak-priced rows and quota-exempt accounts from the server block", async () => {
+    proxyAwareFetch.mockResolvedValueOnce(
+      jsonResponse({
+        status: "none",
+        accessTier: "full",
+        rateLimitsByModel: {},
+        freebucks: {
+          balance: 100,
+          daily: { limit: 25, spent: 5, remaining: 20, resetAt: "2026-09-08T07:00:00.000Z" },
+          wallet: { balance: 80, monthlyBonus: 0 },
+          quotaExempt: true,
+          planId: null,
+          prices: { "deepseek/deepseek-v4-flash": 30 },
+          peak: {
+            modelIds: ["deepseek/deepseek-v4-flash"],
+            surcharge: 15,
+            endsAt: "2026-09-08T10:00:00.000Z",
+          },
+        },
+      }),
+    );
+
+    const usage = await getUsageForProvider({
+      provider: "freebuff",
+      accessToken: "tok-1",
+    });
+
+    // Peak-priced row carries the flag + surcharge window; quotaExempt rides
+    // the summary so the client knows zero-balance sessions still start.
+    expect(usage.quotas["deepseek/deepseek-v4-flash"]).toMatchObject({
+      peak: true,
+      peakSurcharge: 15,
+      peakEndsAt: "2026-09-08T10:00:00.000Z",
+      price: 30,
+    });
+    expect(usage.freebucks).toMatchObject({ quotaExempt: true });
+  });
+
   it("attaches no price to legacy session-quota rows", async () => {
     proxyAwareFetch.mockResolvedValueOnce(jsonResponse(PRE_JOIN));
 
