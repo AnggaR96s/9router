@@ -129,6 +129,7 @@ import p126 from "./bai.js";
 import p127 from "./tokenharbor.js";
 import p128 from "./nous.js";
 import p129 from "./orcarouter.js";
+import p130 from "./apinex.js";
 
 export default [
   p0,
@@ -260,4 +261,5 @@ export default [
   p127,
   p128,
   p129,
+  p130,
 ];

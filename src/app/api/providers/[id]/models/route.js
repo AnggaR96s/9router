@@ -14,6 +14,7 @@ import { fetchBaiModels } from "./bai.js";
 import { fetchTokenharborModels } from "./tokenharbor.js";
 import { fetchNousModels } from "./nous.js";
 import { fetchOrcarouterModels } from "./orcarouter.js";
+import { fetchApinexModels } from "./apinex.js";
 import { resolveCursorModels } from "open-sse/services/cursorModels.js";
 import { normalizeDiscoveredModels } from "@/shared/utils/modelTokenLimits";
 
@@ -477,6 +478,16 @@ const PROVIDER_MODELS_CONFIG = {
       if (result.error) return result;
       if (!result.models.length) {
         return { models: [], warning: "OrcaRouter returned no live models; falling back to static catalog." };
+      }
+      return result;
+    },
+  },
+  apinex: {
+    customResolver: async (connection) => {
+      const result = await fetchApinexModels(connection.apiKey);
+      if (result.error) return result;
+      if (!result.models.length) {
+        return { models: [], warning: "APInex returned no live models; falling back to static catalog." };
       }
       return result;
     },

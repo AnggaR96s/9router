@@ -839,6 +839,13 @@ case "llm7": {
         }, effectiveProxy);
         return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
       }
+      case "apinex": {
+        const url = PROVIDERS.apinex?.modelsUrl || "https://api.apinex.bond/v1/models";
+        const res = await fetchWithConnectionProxy(url, {
+          headers: { Authorization: `Bearer ${connection.apiKey}` },
+        }, effectiveProxy);
+        return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
+      }
       case "nous": {
         // /v1/models is public on Nous Research — probing it would always pass.
         // Probe /chat/completions with a known-free model; only 401/403 = bad key.

@@ -44,6 +44,7 @@
     },
     "usage": {
       "quotaApiUrl": "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+      "quotaSummaryApiUrl": "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
       "loadProjectApiUrl": "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
       "tokenUrl": "https://oauth2.googleapis.com/token"
     },
@@ -1065,7 +1066,6 @@
     "modelsUrl": "https://inference-api.nousresearch.com/v1/models",
     "validateUrl": "https://inference-api.nousresearch.com/v1/models",
     "thinkingFormat": "openai",
-    "format": "openai",
     "headers": {
       "User-Agent": "OpenAI/Python 2.24.0",
       "X-Stainless-Arch": "x64",
@@ -1077,12 +1077,22 @@
       "X-Stainless-Retry-Count": "0",
       "X-Stainless-Runtime": "CPython",
       "X-Stainless-Runtime-Version": "3.11.15"
-    }
+    },
+    "format": "openai",
+    "clientId": "hermes-cli",
+    "tokenUrl": "https://portal.nousresearch.com/api/oauth/token"
   },
   "orcarouter": {
     "baseUrl": "https://www.orcarouter.ai/v1/chat/completions",
     "modelsUrl": "https://www.orcarouter.ai/v1/models",
     "validateUrl": "https://www.orcarouter.ai/v1/models",
+    "thinkingFormat": "openai",
+    "format": "openai"
+  },
+  "apinex": {
+    "baseUrl": "https://api.apinex.bond/v1/chat/completions",
+    "modelsUrl": "https://api.apinex.bond/v1/models",
+    "validateUrl": "https://api.apinex.bond/v1/models",
     "thinkingFormat": "openai",
     "format": "openai"
   }
