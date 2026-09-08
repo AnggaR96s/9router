@@ -469,6 +469,22 @@ export function parseQuotaData(provider, data) {
         }
         break;
 
+      case "freebuff":
+        // Freebuff quota rows carry displayName from the usage API — keep it
+        // as the row label while ordering by the raw modelKey.
+        if (data.quotas) {
+          Object.entries(data.quotas).forEach(([modelKey, quota]) => {
+            normalizedQuotas.push({
+              name: quota.displayName || modelKey,
+              modelKey,
+              used: quota.used || 0,
+              total: quota.total || 0,
+              resetAt: quota.resetAt || null,
+            });
+          });
+        }
+        break;
+
       case "qoder":
         // Qoder ships a `user` quota and (optionally) an `organization`
         // quota, both with same shape: {total, used, remaining, unit, resetAt}.

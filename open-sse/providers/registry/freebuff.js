@@ -62,15 +62,24 @@ export default {
   features: {
     usage: true,
   },
-  // Mirrors the CLI's free picker (FREEBUFF_ROOT_AGENT_ID_BY_MODEL).
-  // mimo/mimo-v2.5-pro is intentionally absent — it is not a free-tier model
-  // and would bill credits or be rejected under the base2-free agent.
+  // Mirrors the Freebuff waiting-room picker (upstream FREEBUFF_MODELS) as of
+  // 2026-09-05, plus the capacity-limited Fable trial. deepseek-v4-pro and
+  // minimax-m3 were withdrawn upstream (2026-08-26 / 2026-08-20) and ox-alpha
+  // (2026-08-27) + gemini-3.8-flash (2026-09-03) never stuck — none are
+  // claimable anymore. z-ai/glm-5.2 is a referral reward (not a free pick),
+  // luna-es / kimi-k3-eco are god-only rows, and the `-max` variants are
+  // provisioned per-account — all intentionally omitted. Fable is a
+  // capacity-limited WAVE trial: sessions only claim while the backend
+  // advertises it via limitedModelOffers on the session status (the executor
+  // auto-checks before claiming); the model is otherwise refused.
   models: [
+    { id: "z-ai/glm-5.3-flash", name: "GLM 5.3 Flash" },
     { id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash" },
-    { id: "deepseek/deepseek-v4-pro", name: "DeepSeek V4 Pro" },
-    { id: "mimo/mimo-v2.5", name: "MiMo 2.5" },
-    { id: "minimax/minimax-m3", name: "MiniMax M3" },
     { id: "openai/gpt-5.6-luna", name: "GPT-5.6 Luna" },
+    { id: "mimo/mimo-v2.5", name: "MiMo 2.5" },
+    { id: "upstage/solar-pro4", name: "Solar Pro 4" },
+    { id: "meta/muse-spark-1.3-contributor", name: "Muse Spark 1.3" },
+    { id: "anthropic/claude-fable-5", name: "Claude Fable 5 (limited offer)" },
   ],
   // Login-flow host — the CLI in freebuff mode logs in via freebuff.com, and
   // the server builds loginUrl from the host it was called on, so the link the
