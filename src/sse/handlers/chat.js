@@ -9,6 +9,7 @@ import {
 } from "../services/auth.js";
 import { handleAntigravityQuotaError, clearAntigravityStrikes } from "../services/antigravityQuota.js";
 import { getSettings } from "@/lib/localDb";
+import { getClientIp } from "@/lib/auth/loginLimiter";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
 import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
@@ -81,7 +82,8 @@ export async function handleChat(request, clientRawRequest = null) {
   }
 
   if (apiKey) {
-    const valid = await isValidApiKey(apiKey, modelStr);
+    const clientIp = getClientIp(request);
+    const valid = await isValidApiKey(apiKey, modelStr, clientIp);
     if (valid === "QUOTA_EXCEEDED") {
       log.warn("AUTH", "API key quota exceeded");
       return errorResponse(HTTP_STATUS.TOO_MANY_REQUESTS, "API key token limit exceeded");
@@ -93,6 +95,10 @@ export async function handleChat(request, clientRawRequest = null) {
     if (valid === "TPM_EXCEEDED") {
       log.warn("AUTH", "API key TPM limit exceeded");
       return errorResponse(HTTP_STATUS.TOO_MANY_REQUESTS, "API key rate limit exceeded (TPM limit reached)");
+    }
+    if (valid === "IP_NOT_ALLOWED") {
+      log.warn("AUTH", `IP "${clientIp}" not in whitelist for this API key`);
+      return errorResponse(HTTP_STATUS.FORBIDDEN, `Client IP (${clientIp}) is not authorized to use this API key`);
     }
     if (valid === "MODEL_NOT_ALLOWED") {
       log.warn("AUTH", `Model "${modelStr}" not allowed for this API key`);

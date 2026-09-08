@@ -396,7 +396,7 @@ export function extractApiKey(request) {
 /**
  * Validate API key (optional - for local use can skip)
  */
-export async function isValidApiKey(apiKey, requestedModel = null) {
+export async function isValidApiKey(apiKey, requestedModel = null, clientIp = null) {
   if (!apiKey) return false;
-  return await validateApiKey(apiKey, requestedModel);
+  return await validateApiKey(apiKey, requestedModel, clientIp);
 }

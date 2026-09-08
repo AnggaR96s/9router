@@ -36,6 +36,7 @@ export default function APIPageClient({ machineId }) {
   const [newKeyAllowedModels, setNewKeyAllowedModels] = useState("*");
   const [newKeyRpm, setNewKeyRpm] = useState("");
   const [newKeyTpm, setNewKeyTpm] = useState("");
+  const [newKeyIpWhitelist, setNewKeyIpWhitelist] = useState("");
   const [editingKey, setEditingKey] = useState(null);
   const [editName, setEditName] = useState("");
   const [editLimit, setEditLimit] = useState("");
@@ -43,6 +44,7 @@ export default function APIPageClient({ machineId }) {
   const [editAllowedModels, setEditAllowedModels] = useState("*");
   const [editRpm, setEditRpm] = useState("");
   const [editTpm, setEditTpm] = useState("");
+  const [editIpWhitelist, setEditIpWhitelist] = useState("");
   const [activeProviders, setActiveProviders] = useState([]);
   const [modelAliases, setModelAliases] = useState({});
   const [showModelPicker, setShowModelPicker] = useState(false);
@@ -719,6 +721,7 @@ export default function APIPageClient({ machineId }) {
           allowedModels: newKeyAllowedModels.trim() || "*",
           rpmLimit: newKeyRpm ? Number(newKeyRpm) : 0,
           tpmLimit: newKeyTpm ? Number(newKeyTpm) : 0,
+          ipWhitelist: newKeyIpWhitelist.trim(),
         }),
       });
       const data = await res.json();
@@ -732,6 +735,7 @@ export default function APIPageClient({ machineId }) {
         setNewKeyAllowedModels("*");
         setNewKeyRpm("");
         setNewKeyTpm("");
+        setNewKeyIpWhitelist("");
         setShowAddModal(false);
       }
     } catch (error) {
@@ -1179,6 +1183,11 @@ export default function APIPageClient({ machineId }) {
                         Rate: {key.rpmLimit > 0 ? `${key.rpmLimit} RPM` : ""}{key.rpmLimit > 0 && key.tpmLimit > 0 ? " · " : ""}{key.tpmLimit > 0 ? `${formatTokensNumber(key.tpmLimit)} TPM` : ""}
                       </span>
                     )}
+                    {key.ipWhitelist && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-medium">
+                        IP Guard: Active
+                      </span>
+                    )}
                     {key.tokenLimit > 0 && (key.usedTokens || 0) >= key.tokenLimit && (
                       <span className="text-xs px-2 py-0.5 rounded bg-red-500/10 text-red-500 font-semibold">
                         Quota Exceeded
@@ -1199,6 +1208,7 @@ export default function APIPageClient({ machineId }) {
                       setEditAllowedModels(key.allowedModels || "*");
                       setEditRpm(key.rpmLimit ? String(key.rpmLimit) : "");
                       setEditTpm(key.tpmLimit ? String(key.tpmLimit) : "");
+                      setEditIpWhitelist(key.ipWhitelist || "");
                     }}
                     className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary transition-all"
                     title="Edit key settings & quota"
@@ -1344,6 +1354,13 @@ export default function APIPageClient({ machineId }) {
               </div>
             )}
           </div>
+          <Input
+            label="IP Whitelist (Optional, comma-separated IPs)"
+            value={newKeyIpWhitelist}
+            onChange={(e) => setNewKeyIpWhitelist(e.target.value)}
+            placeholder="e.g. 192.168.1.1, 103.20.10.5 (Leave empty to allow all)"
+            hint="Leave empty to allow access from any IP address"
+          />
           <div className="flex gap-2 mt-2">
             <Button onClick={handleCreateKey} fullWidth disabled={!newKeyName.trim()}>
               Create
@@ -1459,6 +1476,13 @@ export default function APIPageClient({ machineId }) {
               </div>
             )}
           </div>
+          <Input
+            label="IP Whitelist (Optional, comma-separated IPs)"
+            value={editIpWhitelist}
+            onChange={(e) => setEditIpWhitelist(e.target.value)}
+            placeholder="e.g. 192.168.1.1, 103.20.10.5 (Leave empty to allow all)"
+            hint="Leave empty to allow access from any IP address"
+          />
           <div className="flex gap-2 mt-2">
             <Button
               onClick={() => {
@@ -1470,6 +1494,7 @@ export default function APIPageClient({ machineId }) {
                   allowedModels: editAllowedModels.trim() || "*",
                   rpmLimit: editRpm ? Number(editRpm) : 0,
                   tpmLimit: editTpm ? Number(editTpm) : 0,
+                  ipWhitelist: editIpWhitelist.trim(),
                 });
               }}
               fullWidth

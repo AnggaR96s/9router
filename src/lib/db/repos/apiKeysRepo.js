@@ -17,6 +17,7 @@ function rowToKey(row) {
     allowedModels: row.allowedModels || "*",
     rpmLimit: row.rpmLimit || 0,
     tpmLimit: row.tpmLimit || 0,
+    ipWhitelist: row.ipWhitelist || "",
   };
 }
 
@@ -52,9 +53,10 @@ export async function createApiKey(name, machineId, options = {}) {
     allowedModels: options.allowedModels || "*",
     rpmLimit: Number(options.rpmLimit) || 0,
     tpmLimit: Number(options.tpmLimit) || 0,
+    ipWhitelist: options.ipWhitelist || "",
   };
   db.run(
-    `INSERT INTO apiKeys(id, key, name, machineId, isActive, createdAt, tokenLimit, usedTokens, resetInterval, lastResetAt, allowedModels, rpmLimit, tpmLimit) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO apiKeys(id, key, name, machineId, isActive, createdAt, tokenLimit, usedTokens, resetInterval, lastResetAt, allowedModels, rpmLimit, tpmLimit, ipWhitelist) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       apiKey.id,
       apiKey.key,
@@ -69,6 +71,7 @@ export async function createApiKey(name, machineId, options = {}) {
       apiKey.allowedModels,
       apiKey.rpmLimit,
       apiKey.tpmLimit,
+      apiKey.ipWhitelist,
     ]
   );
   return apiKey;
@@ -82,7 +85,7 @@ export async function updateApiKey(id, data) {
     if (!row) return;
     const merged = { ...rowToKey(row), ...data };
     db.run(
-      `UPDATE apiKeys SET key = ?, name = ?, machineId = ?, isActive = ?, tokenLimit = ?, usedTokens = ?, resetInterval = ?, lastResetAt = ?, allowedModels = ?, rpmLimit = ?, tpmLimit = ? WHERE id = ?`,
+      `UPDATE apiKeys SET key = ?, name = ?, machineId = ?, isActive = ?, tokenLimit = ?, usedTokens = ?, resetInterval = ?, lastResetAt = ?, allowedModels = ?, rpmLimit = ?, tpmLimit = ?, ipWhitelist = ? WHERE id = ?`,
       [
         merged.key,
         merged.name,
@@ -95,6 +98,7 @@ export async function updateApiKey(id, data) {
         merged.allowedModels || "*",
         Number(merged.rpmLimit) || 0,
         Number(merged.tpmLimit) || 0,
+        merged.ipWhitelist || "",
         id,
       ]
     );
@@ -145,7 +149,7 @@ export function recordApiKeyUsageInWindow(key, tokens = 0) {
   rateLimits[key].push({ ts: now, tokens: tokens || 0 });
 }
 
-export async function validateApiKey(key, requestedModel = null) {
+export async function validateApiKey(key, requestedModel = null, clientIp = null) {
   const db = await getAdapter();
   let result = false;
 
@@ -158,6 +162,16 @@ export async function validateApiKey(key, requestedModel = null) {
     if (row.isActive !== 1 && row.isActive !== true) {
       result = false;
       return;
+    }
+
+    // Check IP whitelist (empty = disabled/allow all)
+    const ipWhitelist = (row.ipWhitelist || "").trim();
+    if (ipWhitelist && clientIp) {
+      const allowedIps = ipWhitelist.split(",").map((ip) => ip.trim()).filter(Boolean);
+      if (allowedIps.length > 0 && !allowedIps.includes(clientIp)) {
+        result = "IP_NOT_ALLOWED";
+        return;
+      }
     }
 
     const tokenLimit = Number(row.tokenLimit) || 0;
