@@ -1,3 +1,17 @@
+# v0.1.7 (2026-09-08)
+
+## Features
+- **Freebuff: strict model assignment** — gate connections by `assignedModel` when strict mode is on, so a request for model X is served only by the account pinned to X. Toggle + per-connection model dropdown on the Freebuff provider page (built-in + custom LLM models; disabled unless strict is on). Legacy `freebuffModel` field still honored. Great for single-model-per-account setups (e.g. Luna-only) where pacing locks stay scoped to the account that actually serves that model.
+- **Freebuff: model catalog refresh** — matches the upstream waiting-room picker (2026-09-05): added `z-ai/glm-5.3-flash`, `upstage/solar-pro4`, `meta/muse-spark-1.3-contributor`, `anthropic/claude-fable-5` (limited offer); removed withdrawn `deepseek-v4-pro`, `minimax-m3` (404 on claim). Base3 root-agent mapping updated, incl. `base3-free-fable`.
+- **Freebuff: Claude Fable 5 claim gating** — `guardOfferClaim()` GETs `limitedModelOffers` before claiming (per-account, 45s cache), refusing when the wave pool is closed or daily Fable sessions are used up — no long cooldown on a closed pool, and non-Fable models never pay for the offer GET.
+- **Freebuff: Freebucks metered usage + pricing** — Freebucks accounts (2026-09-02+) get a `freebucks` usage block (daily pool, wallet, monthly USD, per-model prices in Freebucks/hr). Dashboard now shows per-row price (`15 Freebucks/hr · promo tagline`) and a Freebucks account header (`10/25 Freebucks daily · resets in 4h 12m · wallet · monthly usage left`). Pricing is server-authoritative — `priceChanges` promos (e.g. Solar Pro 4 Labor Day) expire server-side without a client release. Freebucks exhaustion now marks the account unavailable until the daily Pacific reset (26h cap) instead of retrying every 30s.
+- **Custom model token limits** — context window + max output are preserved through custom-model discovery, storage, dashboard metadata, `/v1/models` and `/v1/models/info` (OpenAI-style `context_length`, `max_input_tokens`, `max_completion_tokens`, `max_output_tokens`). Re-adding a model merges caps; limits are provider-scoped (never leak across providers with the same model id); unknown custom models publish no invented limits.
+
+## Fixes
+- **Error log provider filter** — filter now matches by canonical id, alias, uiAlias, and display name (case-insensitive): "Freebuff", "fb" and "Token Harbor" all resolve (previously exact-match on the stored id/alias only). New records are stored under the canonical id; legacy alias rows still match.
+- **Provider logos (light/dark theme parity)** — DeepSeek TUI uses the official blue whale mark, Kilo Gateway uses the Kilo Code mark, llm7 background cleaned; dark-glyph logos (featherless, venice, vercel, vercel-ai-gateway, openrouter, jcode, tavily, xquik, ollama-search, elevenlabs) auto-invert via CSS only in dark mode.
+- **Freebuff executor** — all requests now send the consistent `Bun/1.3.14` user-agent (was mixed with `codebuff-cli/0.0.138` on the offer GET).
+
 # v0.1.6 (2026-09-07)
 
 ## Features
