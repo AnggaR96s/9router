@@ -356,8 +356,26 @@ async function requestSession(token, model, proxyOptions) {
     premium_slot_taken: "Freebuff premium slot is taken — try another model.",
   };
   if (GATE_MESSAGES[status]) {
-    const message = data?.message ? `${GATE_MESSAGES[status]} ${data.message}` : GATE_MESSAGES[status];
-    throw new Error(message);
+    const err = new Error(data?.message ? `${GATE_MESSAGES[status]} ${data.message}` : GATE_MESSAGES[status]);
+    // Freebucks / session-allowance exhaustion is a hard stop until the daily
+    // Pacific reset — mark the account unavailable until then so accountFallback
+    // SKIPS it for the rest of the day instead of retrying every 30s and getting
+    // refused repeatedly. resetsAtMs is honored by markAccountUnavailable;
+    // freebuff bypasses the generic 30-min cap (see auth.js).
+    if (status === "rate_limited" || status === "spend_limited") {
+      const resetAtMs = Date.parse(data?.resetAt || "");
+      if (Number.isFinite(resetAtMs) && resetAtMs > Date.now()) {
+        err.resetsAtMs = resetAtMs;
+        err.status = 429;
+      } else {
+        const retryAfterMs = Number(data?.retryAfterMs);
+        if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
+          err.resetsAtMs = Date.now() + retryAfterMs;
+          err.status = 429;
+        }
+      }
+    }
+    throw err;
   }
   throw new Error(`Freebuff session rejected (${status || response.status}): ${JSON.stringify(data).slice(0, 200)}`);
 }
@@ -376,7 +394,7 @@ async function fetchSessionOffers(token, proxyOptions) {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
-      "User-Agent": "codebuff-cli/0.0.138",
+      "User-Agent": "Bun/1.3.14",
       Accept: "application/json",
     },
   }, proxyOptions);

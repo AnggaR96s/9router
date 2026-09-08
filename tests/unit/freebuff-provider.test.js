@@ -297,6 +297,50 @@ describe("freebuff session pre-flight", () => {
     );
   });
 
+  it("rate_limited with a resetAt locks the account until the daily Pacific reset (skip the day, not retry loops)", async () => {
+    const resetAt = "2099-01-01T00:00:00.000Z";
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        status: "rate_limited",
+        resetAt,
+        retryAfterMs: 1234,
+        freebucksShortfall: { price: 15, balance: 0 },
+        message: "Freebucks exhausted",
+      }),
+    );
+    await expect(requestSession("tok-1", "deepseek/deepseek-v4-flash", null)).rejects.toMatchObject({
+      status: 429,
+      resetsAtMs: Date.parse(resetAt),
+    });
+  });
+
+  it("spend_limited falls back to retryAfterMs when resetAt is absent", async () => {
+    const retryAfterMs = 90 * 60 * 1000;
+    fetchMock.mockResolvedValue(
+      jsonResponse({ status: "spend_limited", retryAfterMs, message: "daily spend cap" }),
+    );
+    const before = Date.now();
+    try {
+      await requestSession("tok-1", "deepseek/deepseek-v4-flash", null);
+      throw new Error("should have rejected");
+    } catch (error) {
+      expect(error.status).toBe(429);
+      expect(error.resetsAtMs).toBeGreaterThanOrEqual(before + retryAfterMs - 1000);
+      expect(error.resetsAtMs).toBeLessThanOrEqual(before + retryAfterMs + 1000);
+    }
+  });
+
+  it("rate_limited without any reset hint stays a plain error (transient cooldown path)", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ status: "rate_limited", message: "busy" }));
+    try {
+      await requestSession("tok-1", "deepseek/deepseek-v4-flash", null);
+      throw new Error("should have rejected");
+    } catch (error) {
+      expect(error.status).toBeUndefined();
+      expect(error.resetsAtMs).toBeUndefined();
+    }
+  });
+
   it("throws a friendly error on country_blocked", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ status: "country_blocked" }));
     await expect(ensureSession("tok-1", "deepseek/deepseek-v4-flash", null)).rejects.toThrow(

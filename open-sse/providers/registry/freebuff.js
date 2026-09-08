@@ -34,7 +34,7 @@ export default {
     website: "https://freebuff.com",
     notice: {
       signupUrl: "https://freebuff.com",
-      text: "Free ad-supported coding agent by Codebuff. Sign in with your Freebuff/Codebuff account via browser login. Free tier is ad-supported and limited in some regions (limited mode: 6 x 1-hour sessions/day); full mode runs in select countries. ⚠️ One account has ONE active session locked to ONE model — requesting a different model while a session is active returns 'model_locked' (409); use a separate account per model, or wait for the session to expire.",
+      text: "Free ad-supported coding agent by Codebuff. Sign in with your Freebuff/Codebuff account via browser login. Each model is priced in Freebucks per hour of session, charged once when the session starts. Your daily Freebucks refill at midnight Pacific; the wallet keeps what you buy or earn. Free tier is ad-supported and limited in some regions (limited mode: 6 x 1-hour sessions/day); full mode runs in select countries. ⚠️ One account has ONE active session locked to ONE model — requesting a different model while a session is active returns 'model_locked' (409); use a separate account per model, or wait for the session to expire.",
     },
   },
   category: "free",
@@ -63,15 +63,21 @@ export default {
     usage: true,
   },
   // Mirrors the Freebuff waiting-room picker (upstream FREEBUFF_MODELS) as of
-  // 2026-09-05, plus the capacity-limited Fable trial. deepseek-v4-pro and
-  // minimax-m3 were withdrawn upstream (2026-08-26 / 2026-08-20) and ox-alpha
-  // (2026-08-27) + gemini-3.8-flash (2026-09-03) never stuck — none are
-  // claimable anymore. z-ai/glm-5.2 is a referral reward (not a free pick),
-  // luna-es / kimi-k3-eco are god-only rows, and the `-max` variants are
-  // provisioned per-account — all intentionally omitted. Fable is a
-  // capacity-limited WAVE trial: sessions only claim while the backend
-  // advertises it via limitedModelOffers on the session status (the executor
-  // auto-checks before claiming); the model is otherwise refused.
+  // 2026-09-07. NO per-model prices live here: Freebucks pricing is
+  // server-authoritative — the session response's `freebucks` block carries
+  // `prices` (model → Freebucks/hr) plus an announced `priceChanges` schedule
+  // (promos like Solar Pro 4's Labor Day run expire server-side; see
+  // services/usage/freebuff.js which folds both in, exactly like the upstream
+  // CLI which hardcodes no number). Plus the capacity-limited Fable trial.
+  // deepseek-v4-pro and minimax-m3 were withdrawn upstream (2026-08-26 /
+  // 2026-08-20) and ox-alpha (2026-08-27) + gemini-3.8-flash (2026-09-03)
+  // never stuck — none are claimable anymore.
+  // z-ai/glm-5.2 is a referral reward (not a free pick), luna-es / kimi-k3-eco
+  // are god-only rows, and the `-max` variants are provisioned per-account —
+  // all intentionally omitted. Fable is a capacity-limited WAVE trial: sessions
+  // only claim while the backend advertises it via limitedModelOffers on the
+  // session status (the executor auto-checks before claiming); the model is
+  // otherwise refused.
   models: [
     { id: "z-ai/glm-5.3-flash", name: "GLM 5.3 Flash" },
     { id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash" },
