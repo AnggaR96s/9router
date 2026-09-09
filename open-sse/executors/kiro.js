@@ -259,18 +259,24 @@ export class KiroExecutor extends BaseExecutor {
       }
     }
 
+    // CLIRO parity for the Amazon surfaces: the Kiro runtime accepts the
+    // SSO bearer header + agent-mode marker. Without these the deprecated
+    // path gateway answers REQUEST_BODY_INVALID for modern payloads.
+    if (credentials?.accessToken) {
+      headers["x-amz-sso-bearer"] = credentials.accessToken;
+    }
+    headers["x-amzn-kiro-agent-mode"] = "spec";
+    headers["x-amzn-codewhisperer-machine-id"] = "kiro-desktop";
+    const profileArn = credentials?.providerSpecificData?.profileArn;
+    if (profileArn) {
+      headers["x-amzn-codewhisperer-profile-arn"] = profileArn;
+    }
+
     return headers;
   }
 
   /**
-   * Region- and auth-aware endpoint ordering.
-   *
-   * Region first: the registry baseUrls are hardcoded us-east-1. An IAM Identity
-   * Center account homed elsewhere (e.g. eu-central-1) only resolves through the
-   * regional Amazon Q host, so it gets that single endpoint. Rewriting the host
-   * per-region is not an option — `codewhisperer.<region>.amazonaws.com` does not
-   * exist outside us-east-1. us-east-1 (and an unset region) keeps the registry
-   * list untouched, so existing accounts are unaffected.
+   * Auth-aware endpoint ordering.
    *
    * API-key Kiro connections use the Amazon Q surface. The legacy
    * codewhisperer.* GenerateAssistantResponse endpoint can authenticate the key
@@ -281,43 +287,44 @@ export class KiroExecutor extends BaseExecutor {
    * The Kiro IDE gateway (runtime.*.kiro.dev) expects Kiro OIDC/social tokens
    * and rejects TokenType=API_KEY. External IdP enterprise tokens instead
    * use the CodeWhisperer surface, with the `TokenType: EXTERNAL_IDP` header.
-* Builder ID tokens are AWS SSO access tokens too — the kiro.dev gateway
-   * rejects them with terminal 400 {REQUEST_BODY_INVALID}, so they must hit
-   * the CodeWhisperer *.amazonaws.com surface. IAM Identity Center (idc)
-   * tokens are AWS SSO access tokens from the same family; the kiro.dev
-   * gateway rejects them with 403 "bearer token invalid". Other OAuth
-   * methods keep the default order (kiro.dev first) since their tokens are
-   * what that gateway accepts.
+   * Other OAuth methods keep the default order (kiro.dev first) since their
+   * tokens are what that gateway accepts.
    */
   getOrderedBaseUrls(credentials) {
-    const region = (credentials?.providerSpecificData?.region || "us-east-1").trim();
-    if (region && region !== "us-east-1") {
-      return [`https://q.${region}.amazonaws.com/generateAssistantResponse`];
-    }
     const baseUrls = this.getBaseUrls();
     const authMethod = credentials?.providerSpecificData?.authMethod;
-    const isCodeWhispererSurface =
-      authMethod === "api_key" ||
-      authMethod === "external_idp" ||
-      authMethod === "idc" ||
-      authMethod === "builder-id";
-    if (!isCodeWhispererSurface) return baseUrls;
-    const amazon = baseUrls.filter((u) => u.includes("amazonaws.com"));
-    const others = baseUrls.filter((u) => !u.includes("amazonaws.com"));
-    if (authMethod === "api_key") {
-      const q = amazon.filter((u) => u.includes("://q."));
-      const remaining = amazon.filter((u) => !u.includes("://q."));
-      return q.length > 0
-        ? [...q, ...remaining, ...others]
-        : [...amazon, ...others];
-    }
+    // IAM Identity Center (idc) tokens are AWS SSO access tokens — the same
+    // family as external_idp/api_key. The kiro.dev gateway rejects them with
+    // 403 "bearer token invalid", so they must hit the CodeWhisperer
+    // *.amazonaws.com surface, and in the region the token was minted in
+    // (the baseUrls are hardcoded us-east-1).
+    // Kiro deprecated the legacy path-style GenerateAssistantResponse on
+    // runtime.*.kiro.dev (IDE 1.0.228+ moved to POST / + x-amz-target). The
+    // path gateway now answers valid modern payloads with 400
+    // REQUEST_BODY_INVALID, and 400 is terminal in BaseExecutor, so kiro.dev
+    // must never be the first surface for any auth method. Amazon surfaces
+    // reject foreign tokens with 401/403, which DO fall through, so trying
+    // q/codewhisperer first is safe for every auth method (CLIRO parity).
 
-    return amazon.length > 0 ? [...amazon, ...others] : baseUrls;
+    const region = (credentials?.providerSpecificData?.region || "us-east-1").trim();
+    const regionalize = (u) =>
+      region && region !== "us-east-1" && u.includes("amazonaws.com")
+        ? u.replace(/([a-z]+)\.[a-z0-9-]+\.amazonaws\.com/, `$1.${region}.amazonaws.com`)
+        : u;
+
+    const amazon = baseUrls.filter((u) => u.includes("amazonaws.com")).map(regionalize);
+    const others = baseUrls.filter((u) => !u.includes("amazonaws.com"));
+    const q = amazon.filter((u) => u.includes("://q."));
+    const remaining = amazon.filter((u) => !u.includes("://q."));
+    return q.length > 0
+      ? [...q, ...remaining, ...others]
+      : [...amazon, ...others];
   }
 
   buildUrl(model, stream, urlIndex = 0, credentials = null) {
     const baseUrls = this.getOrderedBaseUrls(credentials);
-    return baseUrls[urlIndex] || baseUrls[0] || this.config.baseUrl;
+    const url = baseUrls[urlIndex] || baseUrls[0] || this.config.baseUrl;
+    return url;
   }
 
   // Retry only endpoint/auth-surface failures. Payload-invalid HTTP 400 must be

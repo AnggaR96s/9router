@@ -20,28 +20,27 @@ describe("Kiro auth-aware endpoint routing", () => {
     ]);
   });
 
-  it("routes Builder ID OAuth to the CodeWhisperer surface", () => {
+  it("routes Builder ID OAuth through Amazon Q first (runtime path deprecated)", () => {
     expect(executor.getOrderedBaseUrls(credentials("builder-id"))).toEqual([
-      CODEWHISPERER,
       Q,
+      CODEWHISPERER,
       RUNTIME,
     ]);
   });
 
-  it("keeps external IdP on CodeWhisperer before Amazon Q", () => {
+  it("routes external IdP through Amazon Q first", () => {
     expect(executor.getOrderedBaseUrls(credentials("external_idp"))).toEqual([
-      CODEWHISPERER,
       Q,
+      CODEWHISPERER,
       RUNTIME,
     ]);
   });
 
-  it("routes non-us-east-1 IDC accounts to the regional Amazon Q host", () => {
-    // codewhisperer.<region>.amazonaws.com has no DNS record outside
-    // us-east-1; q.<region>.amazonaws.com is the only host that resolves
-    // and accepts the region-bound token.
+  it("regionalizes AWS endpoints for IDC with Q first", () => {
     expect(executor.getOrderedBaseUrls(credentials("idc", "eu-west-1"))).toEqual([
       "https://q.eu-west-1.amazonaws.com/generateAssistantResponse",
+      "https://codewhisperer.eu-west-1.amazonaws.com/generateAssistantResponse",
+      RUNTIME,
     ]);
   });
 
