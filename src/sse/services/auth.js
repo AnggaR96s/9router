@@ -278,7 +278,12 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
       ? resetsAtMs - Date.now()
       : providerId === "freebuff"
         ? Math.min(resetsAtMs - Date.now(), 26 * 60 * 60 * 1000)
-        : Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS);
+        // TokenHarbor free tier is a rolling 7-day period — the model is hard-exhausted
+        // until the next window. Re-poking every 30min just burns 429s. Guard at 8d so
+        // a bad server value can't lock forever.
+        : providerId === "tokenharbor"
+          ? Math.min(resetsAtMs - Date.now(), 8 * 24 * 60 * 60 * 1000)
+          : Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS);
     newBackoffLevel = 0;
   } else {
     ({ shouldFallback, cooldownMs, newBackoffLevel } = checkFallbackError(status, errorText, backoffLevel));
