@@ -2,7 +2,10 @@
 const KNOWN_FREE_OPENCODE_MODELS = ["big-pickle"];
 
 // Upstream returns "Model is unavailable" for this id (2026-09-02) — re-enable when fixed
-const DEAD_FREE_OPENCODE_MODELS = new Set(["deepseek-v4-flash-free"]);
+const DEAD_FREE_OPENCODE_MODELS = new Set([
+  "deepseek-v4-flash-free", // "Model is unavailable" (2026-09-02, still dead 2026-09-10)
+  "nemotron-3-ultra-free", // upstream [404] Provider returned error (2026-09-10)
+]);
 
 export const FILTERS = {
   // Public OpenAI-compatible catalogs: import all models returned by /models.
