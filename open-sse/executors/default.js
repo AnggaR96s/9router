@@ -101,6 +101,26 @@ export class DefaultExecutor extends BaseExecutor {
     return { ...body, messages, response_format: { type: "json_object" } };
   }
 
+  // TokenHarbor free-tier 429 carries a precise reset: "Your next rolling
+  // 7-day period starts at 2026-09-12T13:14:06.634411+00:00". Extract it so
+  // markAccountUnavailable locks the model until the period rolls, not a 30m cap.
+parseError(response, bodyText) {
+    if (response.status === 429 && bodyText) {
+      // Tight ISO-8601 capture: date T time ('.'fraction) offset/Z, ending on a digit
+      // so a trailing sentence period can't be swallowed into Date.parse.
+      const iso = /\d{4}-\d{2}-\d{2}T[\d:]+(?:\.\d+)?(?:[+-]\d{2}:\d{2}|Z)/i;
+      const m = bodyText.match(new RegExp(`(?:next|new)\\s+(?:rolling\\s+)?\\d+-day\\s+period\\s+starts\\s+at\\s+(${iso.source})`, "i"))
+        || bodyText.match(new RegExp(`(?:resets?|next)\\s+(?:at|on)\\s+(${iso.source})`, "i"));
+      if (m) {
+        const resetMs = Date.parse(m[1]);
+        if (Number.isFinite(resetMs) && resetMs > Date.now()) {
+          return { status: 429, message: bodyText, resetsAtMs: resetMs };
+        }
+      }
+    }
+return super.parseError(response, bodyText);
+  }
+
   buildUrl(model, stream, urlIndex = 0, credentials = null) {
     // Runtime transport (multi-endpoint providers): use the sourceFormat-matched endpoint
     const rt = credentials?.runtimeTransport;
