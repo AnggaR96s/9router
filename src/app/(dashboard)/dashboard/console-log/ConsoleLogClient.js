@@ -22,9 +22,11 @@ function colorLine(line) {
 export default function ConsoleLogClient() {
   const [logs, setLogs] = useState([]);
   const [connected, setConnected] = useState(false);
-  const [stickToBottom, setStickToBottom] = useState(true);
   const [showJumpDown, setShowJumpDown] = useState(false);
   const logRef = useRef(null);
+  // Ref (not state) so a scroll happening while new logs arrive can't race a
+  // state update and re-yank the view down. True = pinned to the bottom.
+  const stickRef = useRef(true);
 
   // How close to the bottom counts as "at the bottom" (px)
   const STICK_THRESHOLD_PX = 60;
@@ -59,6 +61,8 @@ export default function ConsoleLogClient() {
         });
       } else if (msg.type === "clear") {
         setLogs([]);
+        stickRef.current = true;
+        setShowJumpDown(false);
       }
     };
 
@@ -67,14 +71,14 @@ export default function ConsoleLogClient() {
     return () => es.close();
   }, []);
 
-  // Track scroll position: only auto-stick when the user is already at/near
-  // the bottom. Scrolling up pauses auto-scroll so new logs don't yank the
-  // view back down while reading history.
+  // Track scroll position: scrolling up pauses auto-scroll so new logs don't
+  // yank the view back down while reading history. Stick state lives in a ref
+  // so it can't be clobbered by a concurrent logs state update.
   const handleScroll = () => {
     const el = logRef.current;
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD_PX;
-    setStickToBottom(atBottom);
+    stickRef.current = atBottom;
     setShowJumpDown(!atBottom);
   };
 
@@ -82,15 +86,18 @@ export default function ConsoleLogClient() {
     const el = logRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-    setStickToBottom(true);
+    stickRef.current = true;
     setShowJumpDown(false);
   };
 
-  // Auto-scroll to bottom on new logs — only if the user is already at bottom
+  // Auto-scroll to bottom on new logs — only if the user is still pinned to
+  // the bottom (stickRef.current). Reads the ref at update time, so even when
+  // logs arrive in a burst the view stays put after the user scrolled up.
   useEffect(() => {
-    if (!logRef.current || !stickToBottom) return;
-    logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [logs, stickToBottom]);
+    const el = logRef.current;
+    if (!el || !stickRef.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [logs]);
 
   return (
     <div className="">
