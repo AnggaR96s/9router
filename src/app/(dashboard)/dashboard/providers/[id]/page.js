@@ -629,7 +629,7 @@ export default function ProviderDetailPage() {
         if (!modelId || builtInIds.has(modelId) || existingCustomIds.has(modelId)) continue;
         if (existingAliasModels.has(`${providerStorageAlias}/${modelId}`)) continue;
 
-        await handleAddCustomModel(modelId, "llm", providerStorageAlias);
+        await handleAddCustomModel(modelId, "llm", providerStorageAlias, model.caps);
         existingCustomIds.add(modelId);
         importedCount += 1;
       }
