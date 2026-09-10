@@ -117,8 +117,28 @@ parseError(response, bodyText) {
           return { status: 429, message: bodyText, resetsAtMs: resetMs };
         }
       }
+      // Relative retry window instead of an absolute timestamp: Cline's free
+      // daily cap → "Try again in 19h 46m". Convert to an absolute reset so
+      // markAccountUnavailable locks until the window passes, not a 2m backoff.
+      const rel = bodyText.match(/try\s+again\s+in\s+(\d+h(?:\s*\d+m)?(?:\s*\d+s)?|\d+m(?:\s*\d+s)?|\d+s)/i);
+      if (rel) {
+        const parts = rel[1].toLowerCase().match(/\d+[hms]/g);
+        let seconds = 0;
+        if (parts) {
+          for (const p of parts) {
+            const v = Number(p.slice(0, -1));
+            if (p.endsWith("h")) seconds += v * 3600;
+            else if (p.endsWith("m")) seconds += v * 60;
+            else seconds += v;
+          }
+        }
+        if (seconds > 0) {
+          const resetMs = Date.now() + seconds * 1000;
+          return { status: 429, message: bodyText, resetsAtMs: resetMs };
+        }
+      }
     }
-return super.parseError(response, bodyText);
+    return super.parseError(response, bodyText);
   }
 
   buildUrl(model, stream, urlIndex = 0, credentials = null) {

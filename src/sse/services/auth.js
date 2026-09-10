@@ -283,7 +283,12 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
         // a bad server value can't lock forever.
         : providerId === "tokenharbor"
           ? Math.min(resetsAtMs - Date.now(), 8 * 24 * 60 * 60 * 1000)
-          : Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS);
+          // Cline free tier is a daily allowance ("Daily free limit reached …
+          // Try again in 19h 46m") — hard-exhausted until the ~24h window rolls.
+          // Guard at 26h so a bad server value can't lock the model forever.
+          : providerId === "cline"
+            ? Math.min(resetsAtMs - Date.now(), 26 * 60 * 60 * 1000)
+            : Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS);
     newBackoffLevel = 0;
   } else {
     ({ shouldFallback, cooldownMs, newBackoffLevel } = checkFallbackError(status, errorText, backoffLevel));
