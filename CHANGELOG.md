@@ -1,3 +1,34 @@
+# v0.1.9 (2026-09-11)
+
+## Features
+- **Qwen provider (standalone)** — dedicated `qwen` provider with its own registry entry (alias `qwen`, priority 12, `apikey` category), official qwen.ai icon, and Model Studio API-key console link. Kept as a first-class provider rather than merged into `alims-intl`.
+- **Video generation: OpenRouter + Vertex AI (Veo)** — `/v1/videos/*` now routes through a provider-adapter layer (`open-sse/handlers/videoProviders/`) so requests can target OpenRouter or Google Cloud (Veo) credentials instead of xAI only; providers without an adapter keep the previous verbatim passthrough. Poll requests resolve their provider from `x-connection-id` or `?provider=`.
+- **Codex image models: GPT Image 2.5 family** — add `gpt-image-1.5`, `gpt-image-2`, `gpt-image-2.5`, `gpt-image-2.5-flare` and `gpt-image-2.5-sunburst` with multi-image support, and mirror the 2.5 ids into the OpenAI catalog; tool-backed image models route through the Codex responses surface.
+- **Antigravity weekly quota tracking** — weekly Gemini / Claude / GPT quota from `retrieveUserQuotaSummary`, plus free-tier handling (#3892).
+- **OpenCode Go model refresh** — add the ids the provider docs now list: chat/completions `glm-5.3`, `kimi-k3`, `deepseek-flash`, `longcat-2.0`, `hy4-preview`, `hy3`; `/messages` `qwen3.8-max`, `qwen3.8-flash`; Responses-only `grok-4.6`, `gpt-5.6-luna`. `deepseek-v4.1-flash` now leads the catalog.
+- **CLI model selector: provider grouping + search** — the flat numbered model list is replaced by provider-grouped browsing (combos first, then providers by alias order), full-text search across all models, and manual custom model ID entry.
+- **Claude Code: working context-window control** — the "Context window" dropdown now drives the auto-compact window (the old `CLAUDE_CODE_MAX_CONTEXT_TOKENS` was ignored for any model Claude Code recognizes), plus a 1M-context toggle.
+- **CodeBuddy-CN catalog refresh** — `deepseek-v4-flash` replaced with `deepseek-v4.1-flash` to match the server's product-config payload.
+
+## Fixes
+- **Antigravity weekly quota — single code path**: merging the fork's quota work with upstream left two parallel implementations in `getAntigravityUsage` (fork 0..100 scale with `force`, upstream 0..1000); the outer assignment silently won and upstream's family-exhausted reconciliation never ran. Now one path (fork semantics, matching the dashboard's `ratioQuota` convention) with the family-exhausted ported onto it.
+- **Claude `cache_control` over budget** — when the client had already spent the 4-marker budget, re-anchoring added a 5th marker and the request 400'd non-retryably across every account; the marker is now capped at the budget and bare single-object content turns are wrapped before the mid-conversation-system fold.
+- **Claude tool type defaulting** — `defaultClaudeToolType()` stamped `type: "custom"` on every Claude-format request carrying tools, satisfying MiniMax but breaking Anthropic-compatible endpoints that only accept the legacy typeless shape (DeepSeek). Now scoped to gateways declaring `requireClaudeToolType` (#3905).
+- **DeepSeek `/anthropic/v1/messages` tools** — keep the built-in `web_search_*` tools while dropping client-defined `custom` tools (MCP / Read / Bash) that the endpoint rejects with `unknown variant "custom"`.
+- **Codex tool schemas** — strip `\p{...}` Unicode-property patterns the `/responses` validator rejects (it has no property escapes), which 400'd the whole request identically on every account and cost a full combo failover per turn (#3922). Codex image requests also restore the `Version` header, now single-sourced from `registry codex.transport.cliVersion`.
+- **Kiro `REQUEST_BODY_INVALID`** — never send a top-level `systemPrompt` (kiro.dev rejects it with 400); two downstream paths kept writing the field back after the translators stopped emitting it. Requests also route through the current runtime surfaces (#3776).
+- **Cline / Airforce response envelope** — unwrap the `{"success":true,"data":…}` wrapper on non-stream chat completions, which both the dashboard model test and the proxy read at top level and reported as "Provider returned no completion choices" (#3644). Adds the live Cline/ClinePass model catalog and refreshes Airforce free models.
+- **ClinePass API keys** — stop `workos:`-prefixing ClinePass API keys (correct for Cline OAuth WorkOS JWTs, wrong for opaque `clinepass_*` keys, causing 401 on every request) and add clinepass token refresh.
+- **Qoder usage to all clients** — coalesce the empty finish-in-delta frame with the later `choices:[]` usage frame so OpenAI and Claude clients receive `prompt_tokens` / `completion_tokens` / cache-hit tokens (the dashboard already saw them). Inlined images now upload through `/api/v2/image/upload` like qodercli and oversized non-image blocks become stubs.
+- **Qoder Responses plumbing reverted** — the merged Qoder work also rewrote shared translator/handler code to attach usage on `response.completed`, changing token accounting for every provider (proxies saw input tokens rise by the 2000-token context buffer); reverted to keep the previous behaviour for non-Qoder providers.
+- **Stale connection locks** — clear `modelLock_*`, `backoffLevel`, `rateLimitedUntil` and `errorCode` whenever a connection is explicitly marked active after successful validation or OAuth re-login (#3810, #3830).
+- **Fable weekly limit** — parse the limit from `limits[]` instead of fabricating a row (#3847).
+- **Antigravity / Gemini contents** — normalize contents and handle intermediate tool responses so multi-turn tool use round-trips correctly.
+- **Video / Vertex path safety** — reject job ids and model ids that would escape the request URL path (base64url decoding accepted arbitrary bytes, letting a crafted id splice a traversal while the Bearer token stayed attached).
+- **Custom model caps from live catalog** — the "Import from /models" flow now carries each model's context/maxOutput through to the stored custom model and its `/v1/models` metadata instead of keeping only boolean capability flags; limits stay provider-scoped and unknown models publish no invented limits.
+- **Dashboard session calling the LLM API** — a logged-in dashboard browser fetch (Model Arena, etc.) reached `/v1/*` with `Authorization: Bearer local` and was rejected as an invalid API key; requests carrying a valid dashboard session are now accepted, for remote/tunnel access too (not just loopback).
+- **OAuth callback host on remote setups** — Antigravity/Gemini callbacks revert to loopback (Google's shared client only accepts it) while every other provider keeps public-URL auto-detect; the dashboard session cookie gets a 24h `maxAge`.
+
 # v0.1.8 (2026-09-10)
 
 ## Features
