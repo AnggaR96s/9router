@@ -6,7 +6,6 @@ import { fetchAndParseAntigravityWeeklyQuotas } from "./antigravityWeeklyQuota.j
 import { CLIENT_METADATA } from "../../config/appConstants.js";
 import { ANTIGRAVITY_IDE_USER_AGENT, ANTIGRAVITY_IDE_VERSION, ANTIGRAVITY_OAUTH_CLIENT } from "../../providers/shared.js";
 import { U, parseResetTime, normalizeCloudCodeProjectId, fetchWithTimeout } from "./shared.js";
-import { fetchAntigravityWeeklyQuota } from "./antigravity-weekly.js";
 
 // Antigravity API config (from Quotio) — urls from registry, oauth client + dynamic UA kept here
 const ANTIGRAVITY_CONFIG = {
@@ -226,55 +225,43 @@ export async function getAntigravityUsage(accessToken, providerSpecificData, pro
       }
     }
 
-    // Best-effort weekly quota overlay — never blocks or breaks per-model results
-    try {
-      const weeklyQuotas = await fetchAntigravityWeeklyQuota(
-        accessToken,
-        projectId,
-        proxyOptions
-      );
+    // Reconcile weekly quota against model family status:
+    // If every model in a family is locked/exhausted (remainingPercentage === 0)
+    // until a future reset time, the weekly limit cannot be 100% available.
+    // On Google's Free Starter tier, retrieveUserQuotaSummary buggily reports
+    // remainingFraction: 1 even after the starter quota is depleted and all models 429.
+    const entries = Object.entries(quotas);
+    const geminiModels = entries.filter(([k]) => k.startsWith("gemini-") && !k.includes("image"));
+    const claudeModels = entries.filter(([k]) => k.startsWith("claude-"));
 
-      // Reconcile weekly quota against model family status:
-      // If every model in a family is locked/exhausted (remainingPercentage === 0)
-      // until a future reset time, the weekly limit cannot be 100% available.
-      // On Google's Free Starter tier, retrieveUserQuotaSummary buggily reports
-      // remainingFraction: 1 even after the starter quota is depleted and all models 429.
-      const entries = Object.entries(quotas);
-      const geminiModels = entries.filter(([k]) => k.startsWith("gemini-") && !k.includes("image"));
-      const claudeModels = entries.filter(([k]) => k.startsWith("claude-"));
-
-      if (weeklyQuotas.gemini_weekly && geminiModels.length > 0) {
-        const allGeminiExhausted = geminiModels.every(([, q]) => (q.remainingPercentage ?? 0) === 0);
-        if (allGeminiExhausted && weeklyQuotas.gemini_weekly.remainingPercentage > 0) {
-          const maxResetAt = geminiModels.reduce((max, [, q]) =>
-            !max || (q.resetAt && new Date(q.resetAt) > new Date(max)) ? q.resetAt : max, null
-          );
-          weeklyQuotas.gemini_weekly.used = weeklyQuotas.gemini_weekly.total;
-          weeklyQuotas.gemini_weekly.remainingPercentage = 0;
-          if (maxResetAt) {
-            weeklyQuotas.gemini_weekly.resetAt = maxResetAt;
-          }
+    if (weeklyQuotas.gemini_weekly && geminiModels.length > 0) {
+      const allGeminiExhausted = geminiModels.every(([, q]) => (q.remainingPercentage ?? 0) === 0);
+      if (allGeminiExhausted && weeklyQuotas.gemini_weekly.remainingPercentage > 0) {
+        const maxResetAt = geminiModels.reduce((max, [, q]) =>
+          !max || (q.resetAt && new Date(q.resetAt) > new Date(max)) ? q.resetAt : max, null
+        );
+        weeklyQuotas.gemini_weekly.used = weeklyQuotas.gemini_weekly.total;
+        weeklyQuotas.gemini_weekly.remainingPercentage = 0;
+        if (maxResetAt) {
+          weeklyQuotas.gemini_weekly.resetAt = maxResetAt;
         }
       }
-
-      if (weeklyQuotas.claude_gpt_weekly && claudeModels.length > 0) {
-        const allClaudeExhausted = claudeModels.every(([, q]) => (q.remainingPercentage ?? 0) === 0);
-        if (allClaudeExhausted && weeklyQuotas.claude_gpt_weekly.remainingPercentage > 0) {
-          const maxResetAt = claudeModels.reduce((max, [, q]) =>
-            !max || (q.resetAt && new Date(q.resetAt) > new Date(max)) ? q.resetAt : max, null
-          );
-          weeklyQuotas.claude_gpt_weekly.used = weeklyQuotas.claude_gpt_weekly.total;
-          weeklyQuotas.claude_gpt_weekly.remainingPercentage = 0;
-          if (maxResetAt) {
-            weeklyQuotas.claude_gpt_weekly.resetAt = maxResetAt;
-          }
-        }
-      }
-
-      Object.assign(quotas, weeklyQuotas);
-    } catch {
-      // Silently ignore — weekly is best-effort
     }
+
+    if (weeklyQuotas.claude_gpt_weekly && claudeModels.length > 0) {
+      const allClaudeExhausted = claudeModels.every(([, q]) => (q.remainingPercentage ?? 0) === 0);
+      if (allClaudeExhausted && weeklyQuotas.claude_gpt_weekly.remainingPercentage > 0) {
+        const maxResetAt = claudeModels.reduce((max, [, q]) =>
+          !max || (q.resetAt && new Date(q.resetAt) > new Date(max)) ? q.resetAt : max, null
+        );
+        weeklyQuotas.claude_gpt_weekly.used = weeklyQuotas.claude_gpt_weekly.total;
+        weeklyQuotas.claude_gpt_weekly.remainingPercentage = 0;
+        if (maxResetAt) {
+          weeklyQuotas.claude_gpt_weekly.resetAt = maxResetAt;
+        }
+      }
+    }
+
 
     return {
       plan: subscriptionInfo?.currentTier?.name || "Unknown",

@@ -24,6 +24,7 @@ describe("Antigravity Usage: Weekly Quota Integration & Fail-Open", () => {
           json: async () => ({
             cloudaicompanionProject: "test-project-123",
             currentTier: { name: "Pro" },
+              paidTier: { id: "g1-pro-tier", name: "Google AI Pro" },
           }),
         };
       }
@@ -129,7 +130,7 @@ describe("Antigravity Usage: Weekly Quota Integration & Fail-Open", () => {
         return {
           ok: true,
           status: 200,
-          json: async () => ({ cloudaicompanionProject: "test-proj-order" }),
+          json: async () => ({ cloudaicompanionProject: "test-proj-order", currentTier: { name: "Pro" }, paidTier: { id: "g1-pro-tier", name: "Google AI Pro" } }),
         };
       }
       if (url.includes(":fetchAvailableModels")) {
@@ -197,7 +198,7 @@ describe("Antigravity Usage: Weekly Quota Integration & Fail-Open", () => {
         return {
           ok: true,
           status: 200,
-          json: async () => ({ cloudaicompanionProject: "test-proj-truncation" }),
+          json: async () => ({ cloudaicompanionProject: "test-proj-truncation", currentTier: { name: "Pro" }, paidTier: { id: "g1-pro-tier", name: "Google AI Pro" } }),
         };
       }
       if (url.includes(":fetchAvailableModels")) {
@@ -273,7 +274,7 @@ describe("Antigravity Usage: Weekly Quota Integration & Fail-Open", () => {
         return {
           ok: true,
           status: 200,
-          json: async () => ({ cloudaicompanionProject: acc.project }),
+          json: async () => ({ cloudaicompanionProject: acc.project, currentTier: { name: "Pro" }, paidTier: { id: "g1-pro-tier", name: "Google AI Pro" } }),
         };
       }
       if (url.includes(":fetchAvailableModels")) {
@@ -343,6 +344,7 @@ describe("Antigravity Usage: Weekly Quota Integration & Fail-Open", () => {
           json: async () => ({
             cloudaicompanionProject: "test-project-404",
             currentTier: { name: "Pro" },
+              paidTier: { id: "g1-pro-tier", name: "Google AI Pro" },
           }),
         };
       }
@@ -392,6 +394,7 @@ describe("Antigravity Usage: Weekly Quota Integration & Fail-Open", () => {
           json: async () => ({
             cloudaicompanionProject: "test-project-429",
             currentTier: { name: "Pro" },
+              paidTier: { id: "g1-pro-tier", name: "Google AI Pro" },
           }),
         };
       }
@@ -441,6 +444,7 @@ describe("Antigravity Usage: Weekly Quota Integration & Fail-Open", () => {
           json: async () => ({
             cloudaicompanionProject: "test-project-500",
             currentTier: { name: "Pro" },
+              paidTier: { id: "g1-pro-tier", name: "Google AI Pro" },
           }),
         };
       }
@@ -490,6 +494,7 @@ describe("Antigravity Usage: Weekly Quota Integration & Fail-Open", () => {
           json: async () => ({
             cloudaicompanionProject: "test-project-bad-json",
             currentTier: { name: "Pro" },
+              paidTier: { id: "g1-pro-tier", name: "Google AI Pro" },
           }),
         };
       }
@@ -541,6 +546,7 @@ describe("Antigravity Usage: Weekly Quota Integration & Fail-Open", () => {
           json: async () => ({
             cloudaicompanionProject: "test-project-net-err",
             currentTier: { name: "Pro" },
+              paidTier: { id: "g1-pro-tier", name: "Google AI Pro" },
           }),
         };
       }
