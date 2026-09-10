@@ -1,3 +1,28 @@
+# v0.1.8 (2026-09-10)
+
+## Features
+- **APInex provider** — new OpenAI-compatible provider (`api.apinex.bond/v1`) with live per-connection model catalog and usage/quota tracking (wallet USD, key spend vs limit, daily tokens with midnight-Pacific reset, plan label).
+- **API key allowed models** — restrict a key to a model list with an interactive model selector modal.
+- **API key token limit + periodic reset** — per-key token budget with automatic reset every 5h / 7d / 14d / 30d.
+- **API key RPM/TPM rate limiting** — per-key requests-per-minute and tokens-per-minute caps, enforced in the request path (429 with distinct error codes).
+- **API key IP whitelist** — restrict a key to specific client IPs.
+- **API key editing** — edit name, limits, interval and allowed models from the endpoint page.
+- **Usage page: Export CSV** — one-click export of usage history.
+- **Context Pruning** — optional token-saver mode (off by default) that keeps the system prompt and the most recent N messages (default 20) to shrink long conversations.
+- **Semantic Response Caching** — optional cache for exact-duplicate non-streaming requests (3h TTL, off by default; Bun runtime only — fail-open no-op on Node).
+- **Combo strategy + Model Arena** — fastest/cheapest combo strategies and a new `/dashboard/arena` model comparison UI.
+- **Cline free model lineup** — synced with the official `api.cline.bot` recommended-models feed: free tier (muse-spark-1.3 contributor, deepseek-v4-flash, glm-5.3-flash, solar-pro4, longcat-2.0, laguna-s-2.1:free) plus current recommended paid models.
+- **OpenCode free model lineup** — static fallback list synced with live `zen/v1/models`: muse-spark 1.2/1.3 contributor free, mimo-v2.5-free, ling-3.0-flash-fin-free, nemotron-3.5-lightning-free, big-pickle; dead ids (deepseek-v4-flash-free, nemotron-3-ultra-free) excluded.
+
+## Fixes
+- **Token Harbor free-tier 429** — parse the rolling 7-day reset timestamp from the error (`"Your next rolling 7-day period starts at …"`) and lock the model until the window rolls over (8-day guard) instead of re-poking every 30 minutes.
+- **Cline daily free limit 429** — parse relative retry windows (`"Try again in 19h 46m"`) into an absolute lock until the daily cap resets (26h guard) — no more 2-minute retry churn.
+- **OAuth callback URL on remote/VPS** — auto-detect the public URL (settings.publicUrl > tunnel publicUrl > request host > localhost fallback) so callbacks no longer bounce to localhost.
+- **DB durability** — immediate synchronous persistence on writes and graceful database close before process exit (sqljs adapter + shutdown hook).
+- **localDb shim** — add missing exports used by chat.js.
+- **Console log view** — scrolling up to read history no longer gets yanked back down when new log lines arrive (stick state moved to a ref so scroll and log updates can't race); "Latest" button jumps back down.
+- **Background token refresh logs** — successful refresh cycles emit one summary line per tick instead of three lines per account.
+
 # v0.1.7 (2026-09-08)
 
 ## Features
