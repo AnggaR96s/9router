@@ -9,6 +9,7 @@ import {
 } from "../services/auth.js";
 import { handleAntigravityQuotaError, clearAntigravityStrikes } from "../services/antigravityQuota.js";
 import { getSettings } from "@/lib/localDb";
+import { isDashboardSession } from "@/lib/auth/dashboardSession";
 import { getClientIp } from "@/lib/auth/loginLimiter";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
@@ -74,14 +75,17 @@ export async function handleChat(request, clientRawRequest = null) {
     return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model");
   }
 
-  // Enforce API key if provided or if required by settings
+  // Enforce API key if provided or if required by settings — unless the
+  // request carries a valid dashboard session (browser fetch from the Model
+  // Arena & co.), which the middleware already trusts like a local user.
   const settings = await getSettings();
-  if (settings.requireApiKey && !apiKey) {
+  const sessionAuthed = await isDashboardSession(request);
+  if (settings.requireApiKey && !sessionAuthed && !apiKey) {
     log.warn("AUTH", "Missing API key (requireApiKey=true)");
     return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
   }
 
-  if (apiKey) {
+  if (apiKey && !sessionAuthed) {
     const clientIp = getClientIp(request);
     const valid = await isValidApiKey(apiKey, modelStr, clientIp);
     if (valid === "QUOTA_EXCEEDED") {

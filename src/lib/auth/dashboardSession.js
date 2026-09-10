@@ -71,6 +71,15 @@ export function clearDashboardAuthCookie(cookieStore) {
   cookieStore.delete("auth_token");
 }
 
+// A logged-in dashboard session is already trusted by the middleware guard —
+// browser fetches (Model Arena & co.) then must not trigger API-key checks in
+// the LLM handlers. Mirrors canAccessPublicLlmApi's session allowance.
+export async function isDashboardSession(request) {
+  const token = request?.cookies?.get?.("auth_token")?.value;
+  if (!token) return false;
+  return await verifyDashboardAuthToken(token);
+}
+
 // Verify the current dashboard password (re-auth for sensitive actions).
 export async function verifyDashboardPassword(password) {
   if (typeof password !== "string" || !password) return false;

@@ -6,6 +6,7 @@ import {
   isValidApiKey,
 } from "../services/auth.js";
 import { getSettings } from "@/lib/localDb";
+import { isDashboardSession } from "@/lib/auth/dashboardSession";
 import { getModelInfo } from "../services/model.js";
 import { handleVideoProxyCore, getVideoConfig, sanitizeSecrets } from "open-sse/handlers/videoCore.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
@@ -29,7 +30,7 @@ const CREATE_ROTATION_STATUSES = new Set([
 async function requireValidApiKey(request) {
   const apiKey = extractApiKey(request);
   const settings = await getSettings();
-  if (settings.requireApiKey) {
+  if (settings.requireApiKey && !(await isDashboardSession(request))) {
     if (!apiKey) return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
     const valid = await isValidApiKey(apiKey);
     if (!valid) return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");

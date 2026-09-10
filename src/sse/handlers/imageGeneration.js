@@ -6,6 +6,7 @@ import {
   isValidApiKey,
 } from "../services/auth.js";
 import { getSettings } from "@/lib/localDb";
+import { isDashboardSession } from "@/lib/auth/dashboardSession";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleImageGenerationCore } from "open-sse/handlers/imageGenerationCore.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
@@ -37,7 +38,7 @@ export async function handleImageGeneration(request) {
 
   const apiKey = extractApiKey(request);
   const settings = await getSettings();
-  if (settings.requireApiKey) {
+  if (settings.requireApiKey && !(await isDashboardSession(request))) {
     if (!apiKey) return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
     const valid = await isValidApiKey(apiKey);
     if (!valid) return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");

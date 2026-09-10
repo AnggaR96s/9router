@@ -6,6 +6,7 @@ import {
   isValidApiKey,
 } from "../services/auth.js";
 import { getSettings, getCombos } from "@/lib/localDb";
+import { isDashboardSession } from "@/lib/auth/dashboardSession";
 import { AI_PROVIDERS, resolveProviderId } from "@/shared/constants/providers.js";
 import { handleFetchCore } from "open-sse/handlers/fetch/index.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
@@ -49,7 +50,7 @@ export async function handleFetch(request) {
 
   // Enforce API key if enabled in settings
   const settings = await getSettings();
-  if (settings.requireApiKey) {
+  if (settings.requireApiKey && !(await isDashboardSession(request))) {
     if (!apiKey) {
       log.warn("AUTH", "Missing API key (requireApiKey=true)");
       return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
