@@ -340,9 +340,9 @@ export function openaiToKiroRequest(model, body, stream, credentials) {
 
   const timestamp = new Date().toISOString();
 
-  // System directives ride inside the session-start user message content (see
-  // contentPrefix below) rather than a top-level field, because the
-  // CodeWhisperer GenerateAssistantResponse surface rejects the latter.
+  // The system prompt travels inside the first user turn's content (contentPrefix):
+  // the CodeWhisperer surface rejects a top-level `systemPrompt` with
+  // 400 REQUEST_BODY_INVALID, so the value below is only a replay cache key.
   const systemPromptParts = [];
   if (thinkingBudget !== null && !usesNativeGptEffort) {
     systemPromptParts.push(buildThinkingSystemPrefix(thinkingBudget));
