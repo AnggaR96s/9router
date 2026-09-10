@@ -155,6 +155,10 @@ async function hasValidApiKey(request) {
 async function canAccessPublicLlmApi(request) {
   if (isLocalRequest(request)) return true;
   if (await hasValidCliToken(request)) return true;
+  // A logged-in dashboard session may call the LLM API from the browser
+  // (same-origin fetch carries the httpOnly SameSite=lax auth cookie) —
+  // powers dashboard features like the Model Arena without an API key.
+  if (await hasValidToken(request)) return true;
   return await hasValidApiKey(request);
 }
 

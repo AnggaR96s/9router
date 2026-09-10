@@ -41,13 +41,13 @@ const { proxy, __test__ } = await import("../../src/dashboardGuard.js");
 
 const PEER_TOKEN = "peer-token-fixture";
 
-function request(pathname, headers = {}) {
+function request(pathname, headers = {}, cookieValue = undefined) {
   const normalizedHeaders = new Headers(headers);
   return {
     method: "GET",
     nextUrl: { pathname, searchParams: new URL(`http://localhost${pathname}`).searchParams },
     headers: normalizedHeaders,
-    cookies: { get: vi.fn(() => undefined) },
+    cookies: { get: vi.fn(() => cookieValue) },
     url: `http://localhost${pathname}`,
   };
 }
@@ -97,6 +97,25 @@ describe("dashboard guard public LLM API access", () => {
 
   it("rejects remote rewritten public LLM API without API key", async () => {
     const response = await proxy(request("/api/v1/chat/completions", { host: "router.example.com" }));
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("API key required for remote API access");
+  });
+
+  it("allows remote public LLM API with a valid dashboard session", async () => {
+    mocks.verifyDashboardAuthToken.mockResolvedValue(true);
+    const response = await proxy(
+      request("/v1/chat/completions", { host: "router.example.com" }, { value: "session-token" })
+    );
+
+    expect(response).toBe(mocks.nextResponse);
+    expect(mocks.verifyDashboardAuthToken).toHaveBeenCalledWith("session-token");
+  });
+
+  it("still rejects remote public LLM API when session token is invalid", async () => {
+    const response = await proxy(
+      request("/v1/chat/completions", { host: "router.example.com" }, { value: "bad-token" })
+    );
 
     expect(response.status).toBe(401);
     expect(response.body.error).toBe("API key required for remote API access");
