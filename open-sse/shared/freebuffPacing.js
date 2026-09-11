@@ -45,19 +45,66 @@ function providerPacing() {
   return PROVIDERS.freebuff?.pacing || null;
 }
 
+// Dashboard override — the per-provider "Pacing Gap" setting. Null means the
+// user never set one, so the resolution falls through to env/registry/default.
+// Lives in memory and is re-primed from settings on startup and on every
+// settings PATCH, so changing the dashboard field applies without a restart.
+let pacingGapMsOverride = null;
+
+export function setFreebuffPacingGapMsOverride(ms) {
+  const n = Number(ms);
+  pacingGapMsOverride = Number.isFinite(n) && n > 0 ? n : null;
+}
+
+export function getFreebuffPacingGapMsOverride() {
+  return pacingGapMsOverride;
+}
+
+/**
+ * Prime the pacing override from a settings object.
+ *
+ * Read from `providerStrategies.freebuff.pacingGapSeconds` — the same slot that
+ * already carries freebuff's `strictModelAssignment`, so one provider-scoped
+ * bag holds every freebuff knob and the dashboard reads/writes them through one
+ * PATCH path. A missing, empty, or non-numeric value clears the override and
+ * hands control back to the registry default (20s), which is what "not set"
+ * has to mean or the field would silently pin a stale number forever.
+ */
+export function applyFreebuffPacingSettings(settings) {
+  const raw = settings?.providerStrategies?.freebuff?.pacingGapSeconds;
+  const seconds = Number(raw);
+  setFreebuffPacingGapMsOverride(
+    raw !== null && raw !== undefined && raw !== "" && Number.isFinite(seconds) && seconds > 0
+      ? seconds * 1000
+      : null,
+  );
+  return pacingGapMsOverride;
+}
+
 /**
  * Minimum idle gap between two requests on the same Freebuff account, in ms.
  *
- * Resolution order: FREEBUFF_PACING_GAP_MS (ops escape hatch) → provider
- * `pacing.gapSeconds` → built-in default. Env wins so an operator can stretch
- * the gap in a ban-storm without a rebuild.
+ * Resolution order: dashboard setting (`providerStrategies.freebuff
+ * .pacingGapSeconds`) → FREEBUFF_PACING_GAP_MS → provider `pacing.gapSeconds`
+ * → built-in default.
+ *
+ * The dashboard wins over the env var on purpose: this is a single-user
+ * gateway whose operator IS the person clicking in the UI, so "what you see in
+ * the dashboard is what runs" beats a hidden deployment-wide value. The env
+ * var stays for headless/CI runs that have no dashboard to click.
  */
 export function getFreebuffPacingGapMs() {
+  if (pacingGapMsOverride !== null) return pacingGapMsOverride;
   const env = Number(process.env.FREEBUFF_PACING_GAP_MS);
   if (Number.isFinite(env) && env > 0) return env;
   const seconds = Number(providerPacing()?.gapSeconds);
   if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
   return DEFAULT_PACING_GAP_MS;
+}
+
+/** The gap the dashboard should show as the effective value, in seconds. */
+export function getEffectiveFreebuffPacingGapSeconds() {
+  return getFreebuffPacingGapMs() / 1000;
 }
 
 // Upper bound for the single-account bounded wait (chat.js). When every

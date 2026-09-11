@@ -5,6 +5,8 @@ import {
   hashFreebuffToken,
   computeFreebuffWaitMs,
   getFreebuffPacingGapMs,
+  applyFreebuffPacingSettings,
+  getEffectiveFreebuffPacingGapSeconds,
 } from "../../open-sse/shared/freebuffPacing.js";
 import { PROVIDERS } from "../../open-sse/providers/index.js";
 
@@ -16,6 +18,69 @@ describe("freebuff pacing", () => {
 
   it("defaults to 20s gap", () => {
     expect(getFreebuffPacingGapMs()).toBe(20_000);
+  });
+
+  it("uses the dashboard setting when one is stored", () => {
+    // `pacingGapSeconds: 10` in the dashboard must mean a 10,000ms gap, and it
+    // outranks both the env var and the registry value.
+    try {
+      applyFreebuffPacingSettings({ providerStrategies: { freebuff: { pacingGapSeconds: 10 } } });
+      expect(getFreebuffPacingGapMs()).toBe(10_000);
+      expect(getEffectiveFreebuffPacingGapSeconds()).toBe(10);
+
+      process.env.FREEBUFF_PACING_GAP_MS = "30000";
+      applyFreebuffPacingSettings({ providerStrategies: { freebuff: { pacingGapSeconds: 5 } } });
+      expect(getFreebuffPacingGapMs()).toBe(5_000);
+    } finally {
+      delete process.env.FREEBUFF_PACING_GAP_MS;
+      applyFreebuffPacingSettings({});
+    }
+  });
+
+  it("falls back to 20s when the dashboard setting is absent or cleared", () => {
+    // The whole promise of the field: "not set" means the default, never a
+    // leftover number.
+    for (const settings of [
+      {},
+      { providerStrategies: {} },
+      { providerStrategies: { freebuff: {} } },
+      { providerStrategies: { freebuff: { strictModelAssignment: true } } },
+      { providerStrategies: { freebuff: { pacingGapSeconds: "" } } },
+      { providerStrategies: { freebuff: { pacingGapSeconds: null } } },
+      { providerStrategies: { freebuff: { pacingGapSeconds: "abc" } } },
+      { providerStrategies: { freebuff: { pacingGapSeconds: 0 } } },
+      { providerStrategies: { freebuff: { pacingGapSeconds: -5 } } },
+      undefined,
+      null,
+    ]) {
+      applyFreebuffPacingSettings(settings);
+      expect(getFreebuffPacingGapMs()).toBe(20_000);
+    }
+  });
+
+  it("clears a stored override when the setting is removed", () => {
+    applyFreebuffPacingSettings({ providerStrategies: { freebuff: { pacingGapSeconds: 7 } } });
+    expect(getFreebuffPacingGapMs()).toBe(7_000);
+    // User empties the field → back to the default, not stuck at 7s.
+    applyFreebuffPacingSettings({ providerStrategies: { freebuff: {} } });
+    expect(getFreebuffPacingGapMs()).toBe(20_000);
+  });
+
+  it("accepts a numeric string from a form field", () => {
+    applyFreebuffPacingSettings({ providerStrategies: { freebuff: { pacingGapSeconds: "12" } } });
+    expect(getFreebuffPacingGapMs()).toBe(12_000);
+    applyFreebuffPacingSettings({});
+  });
+
+  it("paces by the dashboard setting end-to-end", () => {
+    try {
+      applyFreebuffPacingSettings({ providerStrategies: { freebuff: { pacingGapSeconds: 10 } } });
+      expect(acquireFreebuffRequestSlot("token-dash", 1_000)).toBe(true);
+      expect(acquireFreebuffRequestSlot("token-dash", 10_000)).toBe(false);
+      expect(acquireFreebuffRequestSlot("token-dash", 12_000)).toBe(true);
+    } finally {
+      applyFreebuffPacingSettings({});
+    }
   });
 
   it("reads the gap from the provider registry, in seconds", () => {

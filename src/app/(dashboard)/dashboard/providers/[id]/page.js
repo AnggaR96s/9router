@@ -66,6 +66,7 @@ export default function ProviderDetailPage() {
   const [bulkUpdatingProxy, setBulkUpdatingProxy] = useState(false);
   const [providerStrategy, setProviderStrategy] = useState(null);
   const [strictModelAssignment, setStrictModelAssignment] = useState(false);
+  const [pacingGapSeconds, setPacingGapSeconds] = useState("");
   const [providerStickyLimit, setProviderStickyLimit] = useState("");
   const [thinkingMode, setThinkingMode] = useState("auto");
   const [autoPing, setAutoPing] = useState({ enabled: false, connections: {} });
@@ -328,7 +329,13 @@ export default function ProviderDetailPage() {
       const override = (settingsData.providerStrategies || {})[providerId] || {};
       setProviderStrategy(override.fallbackStrategy || null);
       setProviderStickyLimit(override.stickyRoundRobinLimit != null ? String(override.stickyRoundRobinLimit) : "1");
-      if (providerId === "freebuff") setStrictModelAssignment(override.strictModelAssignment === true);
+      if (providerId === "freebuff") {
+        setStrictModelAssignment(override.strictModelAssignment === true);
+        // Empty string = "not set" → resolver falls back to the provider default
+        // (20s). Show the stored value, never the effective one, so the field
+        // stays a faithful mirror of what the user actually chose.
+        setPacingGapSeconds(override.pacingGapSeconds != null ? String(override.pacingGapSeconds) : "");
+      }
       // Load per-provider thinking config
       const thinkingCfg = (settingsData.providerThinking || {})[providerId] || {};
       setThinkingMode(thinkingCfg.mode || "auto");
@@ -419,6 +426,36 @@ export default function ProviderDetailPage() {
   const handleStickyLimitChange = (value) => {
     setProviderStickyLimit(value);
     saveProviderStrategy("round-robin", value);
+  };
+
+  // Persist the freebuff pacing gap (seconds). Empty clears the override so the
+  // provider default applies again — that is the "not set" contract the UI
+  // promises, so an emptied field must DELETE the key rather than store 0/NaN.
+  const handlePacingGapChange = async (value, { commit = false } = {}) => {
+    setPacingGapSeconds(value);
+    if (!commit) return;
+    try {
+      const settingsRes = await fetch("/api/settings", { cache: "no-store" });
+      const settingsData = settingsRes.ok ? await settingsRes.json() : {};
+      const current = settingsData.providerStrategies || {};
+      const trimmed = String(value ?? "").trim();
+      const seconds = Number(trimmed);
+      const nextProvider = { ...(current[providerId] || {}) };
+      if (trimmed === "" || !Number.isFinite(seconds) || seconds <= 0) {
+        delete nextProvider.pacingGapSeconds;
+      } else {
+        nextProvider.pacingGapSeconds = seconds;
+      }
+      await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          providerStrategies: { ...current, [providerId]: nextProvider },
+        }),
+      });
+    } catch (error) {
+      console.log("Error saving Freebuff pacing gap:", error);
+    }
   };
 
   const handleStrictAssignmentToggle = async (enabled) => {
@@ -1651,6 +1688,28 @@ export default function ProviderDetailPage() {
                     <p className="text-[10px] text-text-muted">Only assigned accounts can serve each Freebuff model.</p>
                   </div>
                   <Toggle checked={strictModelAssignment} onChange={handleStrictAssignmentToggle} />
+                </div>
+              )}
+              {providerId === "freebuff" && (
+                <div className="flex flex-wrap items-center gap-2 border-t border-black/[0.03] pt-2 dark:border-white/[0.03] sm:border-t-0 sm:pt-0 dark:border-white/[0.03] sm:border-t-0 sm:pt-0">
+                  <div>
+                    <span className="text-xs text-text-muted font-medium">Pacing Gap</span>
+                    <p className="text-[10px] text-text-muted">
+                      Minimum idle gap between two requests on the same account, in seconds. Leave empty for the default (20s).
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={1}
+                      value={pacingGapSeconds}
+                      onChange={(e) => handlePacingGapChange(e.target.value)}
+                      onBlur={(e) => handlePacingGapChange(e.target.value, { commit: true })}
+                      placeholder="20"
+                      className="w-16 px-2 py-1 text-xs border border-border rounded-md bg-background focus:outline-none focus:border-primary"
+                    />
+                    <span className="text-xs text-text-muted">s</span>
+                  </div>
                 </div>
               )}
             </div>

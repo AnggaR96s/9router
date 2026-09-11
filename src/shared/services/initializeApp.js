@@ -16,6 +16,7 @@ import {
 import { getMitmStatus, startMitm, loadEncryptedPassword, initDbHooks, restoreToolDNS, removeAllDNSEntriesSync } from "@/mitm/manager";
 import { syncToJson as syncMitmAliasCache } from "@/lib/mitmAliasCache";
 import { killAllBridges } from "@/lib/mcp/stdioSseBridge";
+import { applyFreebuffPacingSettings } from "open-sse/shared/freebuffPacing.js";
 
 // Inject correct paths and DB hooks into manager.js (CJS) from ESM context
 (function bootstrapMitm() {
@@ -82,6 +83,11 @@ export async function initializeApp() {
 async function runHeavyStartup() {
   await cleanupProviderConnections();
   const settings = await getSettings();
+
+  // Prime freebuff request pacing from the dashboard setting so the gap the
+  // user configured is live before the first request (and before the keeper's
+  // first tick). Cheap, synchronous, and safe for non-freebuff setups.
+  applyFreebuffPacingSettings(settings);
 
   // Auto-resume tunnel (once per process)
   if (settings.tunnelEnabled && !g.tunnelAutoResumed) {
