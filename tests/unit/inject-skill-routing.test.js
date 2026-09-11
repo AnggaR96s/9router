@@ -6,6 +6,7 @@ beforeEach(async () => {
   const skills = [
     { id: "watermarks-remover", prompt: "WATERMARK_PROMPT_X", keywords: ["watermark", "c2pa"], routingMode: "smart" },
     { id: "commit-lint", prompt: "COMMIT_LINT_PROMPT_X", keywords: ["commit"], routingMode: "always" },
+    { id: "human-handwritten", prompt: "COPY_PROMPT_X", keywords: ["copy"], routingMode: "smart" },
   ];
   vi.doMock("@/lib/skillsRegistry.js", () => ({ getInstalledSkills: async () => skills }));
   mods = await import("../../open-sse/rtk/injectSkill.js");
@@ -43,6 +44,34 @@ describe("injectActiveSkills routing modes (real module)", () => {
     const body = { messages: [{ role: "system", content: "sys" }, { role: "user", content: "remove watermark" }] };
     const injected = await mods.injectActiveSkills(body, "openai", ["watermarks-remover"], {});
     expect(injected).toEqual(["watermarks-remover"]);
+  });
+});
+
+describe("smartMatches word boundaries (real module)", () => {
+  it("does not fire when keyword is a substring inside a longer word", async () => {
+    // "copy" must NOT match "copyright"
+    const body = { messages: [{ role: "user", content: "what is the copyright law in france" }] };
+    const injected = await mods.injectActiveSkills(body, "openai", ["human-handwritten"], { "human-handwritten": "smart" });
+    expect(injected).toEqual([]);
+    expect(JSON.stringify(body)).not.toContain("COPY_PROMPT_X");
+  });
+
+  it("fires when the keyword appears as a whole word", async () => {
+    const body = { messages: [{ role: "user", content: "please rewrite this copy for our landing page" }] };
+    const injected = await mods.injectActiveSkills(body, "openai", ["human-handwritten"], { "human-handwritten": "smart" });
+    expect(injected).toEqual(["human-handwritten"]);
+  });
+
+  it("commit keyword does not match committed/commitment", async () => {
+    const body = { messages: [{ role: "user", content: "the changes were committed yesterday, full commitment" }] };
+    const injected = await mods.injectActiveSkills(body, "openai", ["commit-lint"], { "commit-lint": "smart" });
+    expect(injected).toEqual([]);
+  });
+
+  it("hyphenated keywords still match whole-word", async () => {
+    const body = { messages: [{ role: "user", content: "this text is pure ai-slop" }] };
+    const injected = await mods.injectActiveSkills(body, "openai", ["watermarks-remover"], { "watermarks-remover": "smart" });
+    expect(injected).toEqual([]); // ai-slop is not a watermarks keyword
   });
 });
 

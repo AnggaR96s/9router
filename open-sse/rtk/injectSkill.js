@@ -53,9 +53,24 @@ function userText(body) {
 }
 
 // Smart mode: inject only when a skill keyword appears in recent user text.
+// Word-boundary match so short keywords ("copy") do not fire inside longer
+// words ("copyright"). Keywords come from remote manifests, so escape them
+// before building the regex.
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function smartMatches(text, keywords) {
   if (!text) return false;
-  return keywords.some((k) => text.includes(String(k).toLowerCase()));
+  return keywords.some((k) => {
+    const kw = String(k).trim().toLowerCase();
+    if (!kw) return false;
+    try {
+      return new RegExp(`\\b${escapeRegExp(kw)}\\b`).test(text);
+    } catch {
+      return false;
+    }
+  });
 }
 
 export async function injectActiveSkills(body, format, activeSkillIds, routingModes) {
