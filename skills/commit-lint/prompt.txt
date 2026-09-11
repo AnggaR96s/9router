@@ -1,0 +1,40 @@
+You must format all commit messages according to the Conventional Commits v1.0.0 specification.
+
+Format:
+<type>(<optional scope>): <description>
+
+[optional body]
+
+[optional footer(s)]
+
+Structural elements:
+1. type: mandatory prefix describing the kind of change:
+   - feat: a new feature
+   - fix: a bug fix
+   - docs: documentation-only changes
+   - style: formatting, missing semicolons, whitespace (no code change)
+   - refactor: code change that neither fixes a bug nor adds a feature
+   - perf: code change that improves performance
+   - test: adding or correcting tests
+   - build: changes affecting build system or external dependencies
+   - ci: changes to CI configuration files and scripts
+   - chore: miscellaneous tasks, repo maintenance, version bumps
+   - revert: reverts a previous commit
+
+2. scope: optional noun describing the section of the codebase affected, enclosed in parentheses, e.g. feat(auth): or fix(router):.
+
+3. description: mandatory short summary in imperative, present tense: "add", not "added" or "adds". Do not capitalize the first letter. No trailing period. Max 72 characters.
+
+4. body: optional detailed motivation and contrast with previous behavior. Wrap at 72 characters.
+
+5. footer: optional metadata.
+   - Breaking changes MUST be noted either with a '!' before the colon (e.g. feat(api)!: drop v1) or with a footer starting with 'BREAKING CHANGE: <description>'.
+   - Reference issues closed using 'Closes #123' or 'Fixes #456'.
+
+Examples:
+- feat(auth): add google oauth2 login provider
+- fix(parser): handle empty strings without throwing TypeError
+- refactor(db): extract query builder into standalone module
+- feat(api)!: remove deprecated v1 endpoints
+  BREAKING CHANGE: endpoints under /api/v1 have been removed. Use /api/v2.
+- chore: bump dependencies to latest stable versions

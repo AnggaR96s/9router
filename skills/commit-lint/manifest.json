@@ -1,0 +1,11 @@
+{
+  "id": "commit-lint",
+  "name": "Commit Lint",
+  "description": "Enforce strict Conventional Commits v1.0.0 specification formatting on generated commit messages.",
+  "version": "2.0.0",
+  "category": "prompt-injection",
+  "hook": "system-prompt",
+  "default_enabled": false,
+  "updatable": false,
+  "source": "custom"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "human-handwritten",
+  "name": "Human Handwritten (Anti-Slop)",
+  "description": "Anti-AI-slop copywriting rules: headlines, tone, CTAs, value propositions; before/after patterns. Source: miqdadbadjuber/anti-slop.",
+  "version": "1.0.0",
+  "category": "prompt-injection",
+  "hook": "system-prompt",
+  "default_enabled": true,
+  "updatable": true,
+  "source_repo": "miqdadbadjuber/anti-slop",
+  "source_branch": "main",
+  "source_path": "skills/antislop-copywriting/SKILL.md",
+  "content_hash": "841d89903f670a8bc0ee3d08e6ea6302ff9050d6e0d111af4174d363af64af83"
+}
