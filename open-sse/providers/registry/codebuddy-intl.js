@@ -45,6 +45,7 @@ export default {
   },
   // Same model lineup exposed by the CN gateway — intl backend is the same catalog.
   models: [
+    { id: "glm-5.3", name: "GLM-5.3" },
     { id: "glm-5.2", name: "GLM-5.2" },
     { id: "glm-5.1", name: "GLM-5.1" },
     { id: "glm-5.0", name: "GLM-5.0" },
@@ -53,13 +54,18 @@ export default {
     { id: "glm-4.7", name: "GLM-4.7" },
     { id: "minimax-m3", name: "MiniMax-M3" },
     { id: "minimax-m2.7", name: "MiniMax-M2.7" },
+    { id: "kimi-k3", name: "Kimi-K3" },
     { id: "kimi-k2.7", name: "Kimi-K2.7-Code" },
     { id: "kimi-k2.6", name: "Kimi-K2.6" },
     { id: "kimi-k2.5", name: "Kimi-K2.5" },
     { id: "hy3-preview", name: "Hy3 Preview" },
+    { id: "deepseek-v4.1-flash", name: "DeepSeek-V4.1-Flash" },
     { id: "deepseek-v4-pro", name: "DeepSeek-V4-Pro" },
     { id: "deepseek-v4-flash", name: "DeepSeek-V4-Flash" },
     { id: "deepseek-v3-2-volc", name: "DeepSeek-V3.2" },
+    { id: "gpt-5.6-luna", name: "GPT-5.6-Luna" },
+    { id: "gpt-5.6-sol", name: "GPT-5.6-Sol" },
+    { id: "gpt-5.6-terra", name: "GPT-5.6-Terra" },
   ],
   oauth: {
     baseUrl: "https://www.codebuddy.ai",
