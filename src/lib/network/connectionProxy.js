@@ -95,8 +95,15 @@ export async function resolveConnectionProxyConfig(
 
       if (isValidPool) {
         /**
-         * Vercel/Cloudflare relay proxies use base URL rewriting
+         * Vercel/Cloudflare/Deno relay proxies use base URL rewriting
          * instead of HTTP_PROXY environment variables.
+         *
+         * The URL field is still called `vercelRelayUrl` because all three
+         * relay kinds share the exact same header contract and one unified
+         * transport reads it — the name is a historical artifact, NOT the
+         * pool's kind. Consumers that need to LABEL a relay (logs, UI copy)
+         * must read `relayType`, otherwise a Cloudflare Worker deployed on
+         * *.workers.dev gets reported as a Vercel relay.
          */
         if (proxyPool.type === "vercel" || proxyPool.type === "cloudflare" || proxyPool.type === "deno") {
           return {
@@ -111,7 +118,8 @@ export async function resolveConnectionProxyConfig(
 
             strictProxy: proxyPool.strictProxy === true,
 
-            vercelRelayUrl: proxyUrl, // Still mapped to vercelRelayUrl in the unified payload since they use the exact same header spec
+            vercelRelayUrl: proxyUrl,
+            relayType: proxyPool.type,
           };
         }
 

@@ -353,7 +353,12 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   if (proxyOptions.vercelRelayUrl) {
     const connectionName = credentials?.connectionName || credentials?.connectionId || "unknown";
     const poolId = credentials?.providerSpecificData?.connectionProxyPoolId || "none";
-    log?.info?.("PROXY", `${provider.toUpperCase()} | ${model} | conn=${connectionName} | pool=${poolId} | vercel-relay=${proxyOptions.vercelRelayUrl}`);
+    // Label the ACTUAL relay kind. All three relay kinds ride the same
+    // `vercelRelayUrl` transport field, so logging that field name reported a
+    // Cloudflare Worker as "vercel-relay" and sent the reader hunting a
+    // mis-typed pool that was in fact correct.
+    const relayKind = credentials?.providerSpecificData?.relayType || "relay";
+    log?.info?.("PROXY", `${provider.toUpperCase()} | ${model} | conn=${connectionName} | pool=${poolId} | ${relayKind}-relay=${proxyOptions.vercelRelayUrl}`);
   } else if (proxyOptions.connectionProxyEnabled && proxyOptions.connectionProxyUrl) {
     let maskedProxyUrl = proxyOptions.connectionProxyUrl;
     try {

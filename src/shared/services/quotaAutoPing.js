@@ -99,6 +99,7 @@ function buildProxyOptions(cfg) {
     connectionProxyUrl: cfg.connectionProxyUrl || "",
     connectionNoProxy: cfg.connectionNoProxy || "",
     vercelRelayUrl: cfg.vercelRelayUrl || "",
+    relayType: cfg.relayType || "",
     strictProxy: false,
   };
 }

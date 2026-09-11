@@ -110,6 +110,7 @@ async function _doRefresh(connectionId, accessToken, providerSpecificData, now) 
       connectionProxyUrl: proxyCfg.connectionProxyUrl || "",
       connectionNoProxy: proxyCfg.connectionNoProxy || "",
       vercelRelayUrl: proxyCfg.vercelRelayUrl || "",
+      relayType: proxyCfg.relayType || "",
       strictProxy: proxyCfg.strictProxy === true,
     };
 

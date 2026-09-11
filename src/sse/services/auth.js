@@ -78,6 +78,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
           connectionNoProxy: resolvedProxy.connectionNoProxy,
           connectionProxyPoolId: resolvedProxy.proxyPoolId || null,
           vercelRelayUrl: resolvedProxy.vercelRelayUrl || "",
+          relayType: resolvedProxy.relayType || "",
         },
       };
     }
@@ -229,6 +230,10 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
         connectionNoProxy: resolvedProxy.connectionNoProxy,
         connectionProxyPoolId: resolvedProxy.proxyPoolId || null,
         vercelRelayUrl: resolvedProxy.vercelRelayUrl || "",
+        // Actual relay kind (vercel|cloudflare|deno) — `vercelRelayUrl` is the
+        // shared transport field name, not the pool's type. Used for log/UI
+        // labelling only; routing still reads vercelRelayUrl.
+        relayType: resolvedProxy.relayType || "",
       },
       connectionId: connection.id,
       // Include current status for optimization check
