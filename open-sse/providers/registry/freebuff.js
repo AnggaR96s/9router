@@ -81,7 +81,9 @@ export default {
   // model_not_found at Meta on every key) and 1.2 took its place.
   models: [
     { id: "z-ai/glm-5.3-flash", name: "GLM 5.3 Flash" },
-    { id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash" },
+    // Renamed by upstream on 2026-09-10: the undated wire id moved to V4.1 Flash
+    // (and became natively multimodal). The id is unchanged on purpose.
+    { id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4.1 Flash" },
     { id: "openai/gpt-5.6-luna", name: "GPT-5.6 Luna" },
     { id: "mimo/mimo-v2.5", name: "MiMo 2.5" },
     { id: "upstage/solar-pro4", name: "Solar Pro 4" },

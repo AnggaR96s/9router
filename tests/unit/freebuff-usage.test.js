@@ -73,7 +73,7 @@ describe("getUsageForProvider(freebuff)", () => {
       resetAt: "2026-08-06T07:00:00.000Z",
       recurring: true,
       unlimited: false,
-      displayName: "DeepSeek V4 Flash",
+      displayName: "DeepSeek V4.1 Flash",
     });
     expect(usage.quotas["openai/gpt-5.6-luna"]).toMatchObject({
       used: 1,
@@ -150,7 +150,7 @@ describe("getUsageForProvider(freebuff)", () => {
       recurring: true,
       unlimited: false,
       price: 15,
-      displayName: "DeepSeek V4 Flash",
+      displayName: "DeepSeek V4.1 Flash",
     });
     expect(usage.quotas["z-ai/glm-5.3-flash"]).toMatchObject({
       used: 15,
@@ -214,6 +214,62 @@ describe("getUsageForProvider(freebuff)", () => {
       priceNote: "Limited-time trial",
       displayName: "Solar Pro 4",
     });
+  });
+
+  it("reports the account-level freeWindows (day/week/month) alongside per-model quotas", async () => {
+    proxyAwareFetch.mockResolvedValueOnce(
+      jsonResponse({
+        status: "none",
+        accessTier: "full",
+        rateLimitsByModel: {},
+        freeWindows: {
+          dayUsed: 1,
+          dayLimit: 5,
+          weekUsed: 2,
+          weekLimit: 14,
+          monthUsed: 3,
+          monthLimit: 40,
+          dayResetAt: "2026-09-12T07:00:00.000Z",
+          monthResetAt: "2026-10-01T07:00:00.000Z",
+        },
+      }),
+    );
+
+    const usage = await getUsageForProvider({
+      provider: "freebuff",
+      accessToken: "tok-1",
+    });
+
+    // Account-level allowance is reported once, not duplicated per model.
+    expect(usage.freeWindows).toEqual([
+      { label: "Day", used: 1, total: 5, resetAt: "2026-09-12T07:00:00.000Z", recurring: true, unlimited: false },
+      { label: "Week", used: 2, total: 14, resetAt: null, recurring: true, unlimited: false },
+      { label: "Month", used: 3, total: 40, resetAt: "2026-10-01T07:00:00.000Z", recurring: true, unlimited: false },
+    ]);
+    expect(Object.keys(usage.quotas)).toEqual([]);
+  });
+
+  it("omits freeWindows entirely on a server that does not send it", async () => {
+    proxyAwareFetch.mockResolvedValueOnce(
+      jsonResponse({
+        status: "active",
+        accessTier: "full",
+        instanceId: "inst-1",
+        model: "deepseek/deepseek-v4-flash",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+        rateLimitsByModel: {
+          "deepseek/deepseek-v4-flash": { limit: 6, recentCount: 1, resetAt: "2026-08-06T07:00:00.000Z" },
+        },
+      }),
+    );
+
+    const usage = await getUsageForProvider({
+      provider: "freebuff",
+      accessToken: "tok-1",
+    });
+
+    expect(usage.freeWindows).toBeUndefined();
+    expect(usage.quotas["deepseek/deepseek-v4-flash"]).toMatchObject({ used: 1, total: 6 });
   });
 
   it("flags peak-priced rows and quota-exempt accounts from the server block", async () => {
@@ -335,14 +391,14 @@ describe("parseQuotaData(freebuff)", () => {
           used: 4.1,
           total: 6,
           resetAt: "2026-08-06T07:00:00.000Z",
-          displayName: "DeepSeek V4 Flash",
+          displayName: "DeepSeek V4.1 Flash",
         },
       },
     });
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      name: "DeepSeek V4 Flash",
+      name: "DeepSeek V4.1 Flash",
       modelKey: "deepseek/deepseek-v4-flash",
       used: 4.1,
       total: 6,
