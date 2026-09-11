@@ -17,11 +17,13 @@ export default {
   transport: {
     baseUrl: "https://api.groq.com/openai/v1/chat/completions",
     validateUrl: "https://api.groq.com/openai/v1/models",
-    // No dedicated quota endpoint; rate-limit info rides on x-ratelimit-*
-    // response headers, always included. Reuse the models list (already
-    // used as validateUrl) so reading usage never costs tokens.
+    // No dedicated quota endpoint. x-ratelimit-* headers ride on inference
+    // responses only — GET /models returns none — so the usage probe is a
+    // minimal completion (max_tokens: 1) against `url`, and `modelsUrl` is
+    // used to pick a chat-capable model for it. See services/usage/groq.js.
     usage: {
-      url: "https://api.groq.com/openai/v1/models",
+      url: "https://api.groq.com/openai/v1/chat/completions",
+      modelsUrl: "https://api.groq.com/openai/v1/models",
     },
   },
   models: [

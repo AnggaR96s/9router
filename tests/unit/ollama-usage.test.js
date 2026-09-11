@@ -32,6 +32,18 @@ const SAMPLE_USAGE = {
     },
     models: [],
   },
+  // Current API shape: `monthly` only (session/weekly are no longer sent).
+  limits: {
+    monthly: {
+      usage: 0,
+      models: [{ name: "gpt-oss:120b", request_count: 1 }],
+    },
+  },
+};
+
+// Older shape, still handled: session + weekly buckets.
+const LEGACY_USAGE = {
+  activity: { cost: "0.00000", models: [] },
   limits: {
     session: { usage: 0, models: [] },
     weekly: {
@@ -73,21 +85,15 @@ describe("getUsageForProvider(ollama)", () => {
 
     expect(usage.message).toBeUndefined();
     expect(usage.plan).toBe("Max");
-    expect(usage.quotas["Session (5h)"]).toMatchObject({
+    // The API reports `monthly` today — that bucket must render.
+    expect(usage.quotas["Monthly (30d)"]).toMatchObject({
       used: 0,
       total: 100,
       remainingPercentage: 100,
       unlimited: false,
     });
-    expect(usage.quotas["Weekly (7d)"]).toMatchObject({
-      used: 100,
-      total: 100,
-      remainingPercentage: 0,
-      unlimited: false,
-    });
     // Must not set absolute remaining — UI treats remaining as %
-    expect(usage.quotas["Session (5h)"].remaining).toBeUndefined();
-    expect(usage.quotas["Weekly (7d)"].remaining).toBeUndefined();
+    expect(usage.quotas["Monthly (30d)"].remaining).toBeUndefined();
 
     expect(proxyAwareFetch).toHaveBeenCalledTimes(2);
 
@@ -101,6 +107,37 @@ describe("getUsageForProvider(ollama)", () => {
     expect(meOpts.method).toBe("POST");
     expect(meOpts.headers.Authorization).toBe("Bearer k");
     expect(meOpts.headers["Content-Length"]).toBe("0");
+  });
+
+  it("still renders the legacy session/weekly buckets", async () => {
+    proxyAwareFetch
+      .mockResolvedValueOnce(jsonResponse(LEGACY_USAGE))
+      .mockResolvedValueOnce(jsonResponse(SAMPLE_ME));
+
+    const usage = await getUsageForProvider({
+      provider: "ollama",
+      apiKey: "k",
+      providerSpecificData: {},
+    });
+
+    expect(usage.quotas["Session (5h)"]).toMatchObject({ used: 0, remainingPercentage: 100 });
+    expect(usage.quotas["Weekly (7d)"]).toMatchObject({ used: 100, remainingPercentage: 0 });
+    expect(usage.quotas["Monthly (30d)"]).toBeUndefined();
+  });
+
+  it("reports no-limits only when no bucket carries a usage value", async () => {
+    proxyAwareFetch
+      .mockResolvedValueOnce(jsonResponse({ activity: { cost: "0" }, limits: {} }))
+      .mockResolvedValueOnce(jsonResponse(SAMPLE_ME));
+
+    const usage = await getUsageForProvider({
+      provider: "ollama",
+      apiKey: "k",
+      providerSpecificData: {},
+    });
+
+    expect(usage.message).toMatch(/no usage limits/i);
+    expect(usage.quotas).toEqual({});
   });
 
   it("surfaces invalid key message on 401", async () => {
@@ -133,7 +170,7 @@ describe("parseQuotaData(ollama)", () => {
     const rows = parseQuotaData("ollama", {
       plan: "Max",
       quotas: {
-        "Session (5h)": {
+        "Monthly (30d)": {
           used: 0,
           total: 100,
           remainingPercentage: 100,
@@ -150,7 +187,7 @@ describe("parseQuotaData(ollama)", () => {
 
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({
-      name: "Session (5h)",
+      name: "Monthly (30d)",
       used: 0,
       total: 100,
       remainingPercentage: 100,

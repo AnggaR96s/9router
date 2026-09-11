@@ -6,6 +6,7 @@ vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
 
 import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js";
 import { getUsageForProvider } from "../../open-sse/services/usage.js";
+import { __clearGroqUsageCache } from "../../open-sse/services/usage/groq.js";
 import {
   USAGE_SUPPORTED_PROVIDERS,
   USAGE_APIKEY_PROVIDERS,
@@ -13,6 +14,7 @@ import {
 import { parseQuotaData } from "../../src/app/(dashboard)/dashboard/usage/components/ProviderLimits/utils.js";
 
 const MODELS_URL = "https://api.groq.com/openai/v1/models";
+const COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 function response(body, { status = 200, headers = {} } = {}) {
   return new Response(JSON.stringify(body), {
@@ -20,6 +22,8 @@ function response(body, { status = 200, headers = {} } = {}) {
     headers: { "Content-Type": "application/json", ...headers },
   });
 }
+
+const MODELS = { data: [{ id: "whisper-large-v3" }, { id: "openai/gpt-oss-120b" }] };
 
 const RATE_LIMIT_HEADERS = {
   "x-ratelimit-limit-requests": "14400",
@@ -29,6 +33,13 @@ const RATE_LIMIT_HEADERS = {
   "x-ratelimit-remaining-tokens": "17997",
   "x-ratelimit-reset-tokens": "7.66s",
 };
+
+/** Models list, then the minimal completion carrying the rate-limit headers. */
+function mockProbe(headers = RATE_LIMIT_HEADERS, completionInit = {}) {
+  proxyAwareFetch
+    .mockResolvedValueOnce(response(MODELS))
+    .mockResolvedValueOnce(response({ choices: [] }, { headers, ...completionInit }));
+}
 
 describe("groq registry usage flags", () => {
   it("is listed for apikey quota dashboard", () => {
@@ -40,36 +51,40 @@ describe("groq registry usage flags", () => {
 describe("getUsageForProvider(groq)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __clearGroqUsageCache();
   });
 
-  it("GETs the models endpoint with Bearer apiKey", async () => {
-    proxyAwareFetch.mockResolvedValueOnce(
-      response({ data: [] }, { headers: RATE_LIMIT_HEADERS }),
-    );
+  it("probes chat/completions (not /models) and picks a chat-capable model", async () => {
+    mockProbe();
 
-    const usage = await getUsageForProvider({
-      provider: "groq",
-      apiKey: "gsk_test",
-    });
+    const usage = await getUsageForProvider({ provider: "groq", apiKey: "gsk_test" });
 
     expect(usage.message).toBeUndefined();
     expect(usage.plan).toBe("Groq");
-    expect(proxyAwareFetch).toHaveBeenCalledTimes(1);
-    const [url, opts] = proxyAwareFetch.mock.calls[0];
-    expect(url).toBe(MODELS_URL);
-    expect(opts.method).toBe("GET");
+    expect(proxyAwareFetch).toHaveBeenCalledTimes(2);
+
+    // 1st call: model list to choose the probe target.
+    const [modelsUrl, modelsOpts] = proxyAwareFetch.mock.calls[0];
+    expect(modelsUrl).toBe(MODELS_URL);
+    expect(modelsOpts.method).toBe("GET");
+    expect(modelsOpts.headers.Authorization).toBe("Bearer gsk_test");
+
+    // 2nd call: minimal completion — the ONLY place x-ratelimit-* is returned.
+    const [url, opts] = proxyAwareFetch.mock.calls[1];
+    expect(url).toBe(COMPLETIONS_URL);
+    expect(opts.method).toBe("POST");
     expect(opts.headers.Authorization).toBe("Bearer gsk_test");
+    const body = JSON.parse(opts.body);
+    // Never probe with a whisper/tts model — those reject chat completions.
+    expect(body.model).toBe("openai/gpt-oss-120b");
+    expect(body.max_tokens).toBe(1);
+    expect(body.stream).toBe(false);
   });
 
   it("parses request + token rate-limit headers into quotas", async () => {
-    proxyAwareFetch.mockResolvedValueOnce(
-      response({ data: [] }, { headers: RATE_LIMIT_HEADERS }),
-    );
+    mockProbe();
 
-    const usage = await getUsageForProvider({
-      provider: "groq",
-      apiKey: "gsk_test",
-    });
+    const usage = await getUsageForProvider({ provider: "groq", apiKey: "gsk_test" });
 
     expect(usage.quotas["Requests"]).toMatchObject({
       used: 30,
@@ -86,17 +101,50 @@ describe("getUsageForProvider(groq)", () => {
     expect(new Date(usage.quotas["Tokens"].resetAt).getTime()).toBeGreaterThan(Date.now());
   });
 
-  it("returns a soft message (not an error) when no rate-limit headers are present", async () => {
-    proxyAwareFetch.mockResolvedValueOnce(response({ data: [] }));
+  it("caches the reading so the 60s dashboard poll doesn't burn the RPD budget", async () => {
+    mockProbe();
 
-    const usage = await getUsageForProvider({
-      provider: "groq",
-      apiKey: "gsk_test",
-    });
+    const first = await getUsageForProvider({ provider: "groq", apiKey: "gsk_test" });
+    expect(proxyAwareFetch).toHaveBeenCalledTimes(2);
+
+    const second = await getUsageForProvider({ provider: "groq", apiKey: "gsk_test" });
+    // No further upstream calls — served from cache.
+    expect(proxyAwareFetch).toHaveBeenCalledTimes(2);
+    expect(second.quotas).toEqual(first.quotas);
+  });
+
+  it("returns a soft message (not an error) when no rate-limit headers are present", async () => {
+    proxyAwareFetch
+      .mockResolvedValueOnce(response(MODELS))
+      .mockResolvedValueOnce(response({ choices: [] }));
+
+    const usage = await getUsageForProvider({ provider: "groq", apiKey: "gsk_test" });
 
     expect(usage.error).toBeUndefined();
     expect(usage.message).toMatch(/no rate-limit data/i);
     expect(usage.quotas).toEqual({});
+  });
+
+  it("keeps the last good reading when a later probe fails", async () => {
+    vi.useFakeTimers();
+    try {
+      mockProbe();
+      const good = await getUsageForProvider({ provider: "groq", apiKey: "gsk_test" });
+      expect(good.quotas["Requests"]).toMatchObject({ total: 14400 });
+
+      // Let the cached reading expire, then make upstream fail. A stale quota
+      // beats flickering the card to an error.
+      vi.advanceTimersByTime(16 * 60 * 1000);
+      proxyAwareFetch
+        .mockResolvedValueOnce(response(MODELS))
+        .mockResolvedValueOnce(response({ error: "boom" }, { status: 500 }));
+
+      const after = await getUsageForProvider({ provider: "groq", apiKey: "gsk_test" });
+      expect(after.message).toBeUndefined();
+      expect(after.quotas["Requests"]).toMatchObject({ total: 14400 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("returns message on missing key / 401", async () => {
@@ -104,8 +152,10 @@ describe("getUsageForProvider(groq)", () => {
     expect(missing.message).toMatch(/api key/i);
     expect(proxyAwareFetch).not.toHaveBeenCalled();
 
-    proxyAwareFetch.mockResolvedValueOnce(response({ error: "invalid_api_key" }, { status: 401 }));
-    const auth = await getUsageForProvider({ provider: "groq", apiKey: "bad" });
+    proxyAwareFetch
+      .mockResolvedValueOnce(response(MODELS))
+      .mockResolvedValueOnce(response({ error: "invalid_api_key" }, { status: 401 }));
+    const auth = await getUsageForProvider({ provider: "groq", apiKey: "gsk_test" });
     expect(auth.message).toMatch(/auth|key/i);
   });
 });

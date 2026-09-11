@@ -26,10 +26,18 @@ export async function getIflowUsage(accessToken) {
 
 /**
  * Ollama Cloud Usage
- * GET https://ollama.com/api/usage — session (5h) + weekly (7d) `usage` is a 0..1
- *   ratio (1.0 = limit reached, e.g. weekly 100% used). No reset timestamp exposed.
+ * GET https://ollama.com/api/usage — `limits` carries per-window buckets whose
+ *   `usage` is a 0..1 ratio (1.0 = limit reached, e.g. weekly 100% used).
+ *
+ *   Current shape (2026-09): { limits: { monthly: { usage, models[] } } }.
+ *   Older shape:            { limits: { session: {...}, weekly: {...} } }.
+ *   Both are handled — the old keys are no longer sent, so reading only
+ *   session/weekly made the tracker report "no usage limits" forever.
+ *
+ *   `activity.cost` is a decimal USD string, `activity.period.type` is
+ *   "last_4_weeks". No reset timestamp is exposed for any bucket.
  * POST https://ollama.com/api/me — plan label (fail-open).
- * Auth: Authorization: Bearer <apiKey>
+ * Auth: Authorization: Bearer ***
  */
 export async function getOllamaUsage(apiKey, providerSpecificData, proxyOptions = null) {
   if (!apiKey) {
@@ -84,24 +92,36 @@ export async function getOllamaUsage(apiKey, providerSpecificData, proxyOptions 
       return { used: usedPct, total: 100, remainingPercentage: 100 - usedPct, resetAt, unlimited: false };
     }
 
-    const sessionRaw = limits.session?.usage;
-    const weeklyRaw = limits.weekly?.usage;
-    const sessionNum = Number(sessionRaw);
-    const weeklyNum = Number(weeklyRaw);
-    const hasSession = sessionRaw !== undefined && sessionRaw !== null && !Number.isNaN(sessionNum);
-    const hasWeekly = weeklyRaw !== undefined && weeklyRaw !== null && !Number.isNaN(weeklyNum);
+    // A bucket is only usable when it carries a numeric `usage`; Ollama omits
+    // windows the account doesn't have (free tier has no session/weekly).
+    function bucketUsage(name) {
+      const raw = limits[name]?.usage;
+      if (raw === undefined || raw === null) return null;
+      const num = Number(raw);
+      return Number.isNaN(num) ? null : num;
+    }
 
-    if (!hasSession && !hasWeekly) {
+    // Label → source bucket. Monthly is what the API reports today; session and
+    // weekly are the older keys, kept so both response shapes render.
+    const BUCKETS = [
+      ["Session (5h)", "session"],
+      ["Weekly (7d)", "weekly"],
+      ["Monthly (30d)", "monthly"],
+    ];
+
+    const quotas = {};
+    for (const [label, key] of BUCKETS) {
+      const usage = bucketUsage(key);
+      if (usage !== null) quotas[label] = ratioQuota(usage);
+    }
+
+    if (Object.keys(quotas).length === 0) {
       return {
         plan,
         message: "Ollama Cloud connected. No usage limits reported.",
         quotas: {},
       };
     }
-
-    const quotas = {};
-    if (hasSession) quotas["Session (5h)"] = ratioQuota(sessionNum);
-    if (hasWeekly) quotas["Weekly (7d)"] = ratioQuota(weeklyNum);
 
     return { plan, quotas };
   } catch (error) {
