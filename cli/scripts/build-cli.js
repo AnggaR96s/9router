@@ -343,6 +343,10 @@ function buildCliPackage() {
     process.exit(1);
   }
 
+  // Remove build-time HOME artifacts (jwt-secret, machine-id, sqlite db) so
+  // they never ship inside the npm package
+  fs.rmSync(path.join(cliAppDir, "cli", ".build-home"), { recursive: true, force: true });
+
   console.log("✨ CLI package build completed!");
   console.log(`📁 Output: ${cliAppDir}`);
 
