@@ -6,6 +6,7 @@ import {
   computeFreebuffWaitMs,
   getFreebuffPacingGapMs,
 } from "../../open-sse/shared/freebuffPacing.js";
+import { PROVIDERS } from "../../open-sse/providers/index.js";
 
 describe("freebuff pacing", () => {
   beforeEach(() => {
@@ -15,6 +16,60 @@ describe("freebuff pacing", () => {
 
   it("defaults to 20s gap", () => {
     expect(getFreebuffPacingGapMs()).toBe(20_000);
+  });
+
+  it("reads the gap from the provider registry, in seconds", () => {
+    // `pacing.gapSeconds: 10` must mean a 10,000ms gap — the whole point of
+    // exposing it as config rather than a hardcoded constant.
+    const original = PROVIDERS.freebuff.pacing;
+    try {
+      PROVIDERS.freebuff.pacing = { gapSeconds: 10 };
+      expect(getFreebuffPacingGapMs()).toBe(10_000);
+      PROVIDERS.freebuff.pacing = { gapSeconds: 45 };
+      expect(getFreebuffPacingGapMs()).toBe(45_000);
+    } finally {
+      PROVIDERS.freebuff.pacing = original;
+    }
+  });
+
+  it("lets the env var override the provider config", () => {
+    const original = process.env.FREEBUFF_PACING_GAP_MS;
+    const originalPacing = PROVIDERS.freebuff.pacing;
+    try {
+      PROVIDERS.freebuff.pacing = { gapSeconds: 10 };
+      process.env.FREEBUFF_PACING_GAP_MS = "30000";
+      expect(getFreebuffPacingGapMs()).toBe(30_000);
+    } finally {
+      if (original === undefined) delete process.env.FREEBUFF_PACING_GAP_MS;
+      else process.env.FREEBUFF_PACING_GAP_MS = original;
+      PROVIDERS.freebuff.pacing = originalPacing;
+    }
+  });
+
+  it("falls back to the built-in default when config is missing or unusable", () => {
+    const original = PROVIDERS.freebuff.pacing;
+    try {
+      PROVIDERS.freebuff.pacing = undefined;
+      expect(getFreebuffPacingGapMs()).toBe(20_000);
+      PROVIDERS.freebuff.pacing = { gapSeconds: "not-a-number" };
+      expect(getFreebuffPacingGapMs()).toBe(20_000);
+    } finally {
+      PROVIDERS.freebuff.pacing = original;
+    }
+  });
+
+  it("paces by the configured gap, not the default", () => {
+    const original = PROVIDERS.freebuff.pacing;
+    try {
+      PROVIDERS.freebuff.pacing = { gapSeconds: 10 };
+      expect(acquireFreebuffRequestSlot("token-cfg", 1_000)).toBe(true);
+      // 9s < 10s gap → still blocked.
+      expect(acquireFreebuffRequestSlot("token-cfg", 10_000)).toBe(false);
+      // 11s > 10s gap → allowed.
+      expect(acquireFreebuffRequestSlot("token-cfg", 12_000)).toBe(true);
+    } finally {
+      PROVIDERS.freebuff.pacing = original;
+    }
   });
 
   it("allows the first request immediately", () => {

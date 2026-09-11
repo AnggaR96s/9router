@@ -11,10 +11,11 @@
 // (same pattern as the executor's freebuff fbState). Tokens are only ever
 // hashed here — never stored, never logged.
 
+import { PROVIDERS } from "../providers/index.js";
+
 const FB_PACING_KEY = "__9routerFreebuffPacing__";
-// 20s min idle gap per account — closer to a human's natural cadence than the
-// 35s we used before (which was tuned for multi-account farms). With
-// single-account use the bounded wait in chat.js absorbs the remainder.
+// Fallback when the provider declares no pacing block and no env override is
+// set. Keep in sync with freebuff's `pacing.gapSeconds` (20s).
 const DEFAULT_PACING_GAP_MS = 20 * 1000;
 const DEFAULT_MAX_WAIT_MS = 30 * 1000;
 
@@ -35,9 +36,28 @@ export function hashFreebuffToken(token) {
   return (h >>> 0).toString(36);
 }
 
+// Pacing config lives on the provider registry entry (registry/freebuff.js
+// `pacing.gapSeconds`), read through the built PROVIDERS table so one edit
+// retunes every consumer — the executor gate and the keeper's ad clock read
+// the SAME number instead of duplicating a constant. Read lazily (not at module
+// load) so a registry change is picked up without a process restart.
+function providerPacing() {
+  return PROVIDERS.freebuff?.pacing || null;
+}
+
+/**
+ * Minimum idle gap between two requests on the same Freebuff account, in ms.
+ *
+ * Resolution order: FREEBUFF_PACING_GAP_MS (ops escape hatch) → provider
+ * `pacing.gapSeconds` → built-in default. Env wins so an operator can stretch
+ * the gap in a ban-storm without a rebuild.
+ */
 export function getFreebuffPacingGapMs() {
   const env = Number(process.env.FREEBUFF_PACING_GAP_MS);
-  return Number.isFinite(env) && env > 0 ? env : DEFAULT_PACING_GAP_MS;
+  if (Number.isFinite(env) && env > 0) return env;
+  const seconds = Number(providerPacing()?.gapSeconds);
+  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
+  return DEFAULT_PACING_GAP_MS;
 }
 
 // Upper bound for the single-account bounded wait (chat.js). When every

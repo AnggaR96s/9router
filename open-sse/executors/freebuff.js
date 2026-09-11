@@ -158,6 +158,9 @@ const FREE_ROOT_AGENT_BY_MODEL = {
   "mimo/mimo-v2.5": "base3-free-mimo",
   "openai/gpt-5.6-luna": "base3-free-luna",
   "upstage/solar-pro4": "base3-free-solar-pro4",
+  // 1.3 is the live row; 1.2's root stays registered while sessions admitted on
+  // it drain (upstream keeps both entries for the same reason).
+  "meta/muse-spark-1.3-contributor": "base3-free-muse-spark-1-3",
   "meta/muse-spark-1.2-contributor": "base3-free-muse-spark",
   "anthropic/claude-fable-5": "base3-free-fable",
 };

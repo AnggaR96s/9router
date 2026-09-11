@@ -597,6 +597,8 @@ describe("freebuff run registration", () => {
     expect(rootAgentIdForModel("mimo/mimo-v2.5")).toBe("base3-free-mimo");
     expect(rootAgentIdForModel("openai/gpt-5.6-luna")).toBe("base3-free-luna");
     expect(rootAgentIdForModel("upstage/solar-pro4")).toBe("base3-free-solar-pro4");
+    expect(rootAgentIdForModel("meta/muse-spark-1.3-contributor")).toBe("base3-free-muse-spark-1-3");
+    // 1.3 is the live row; 1.2 keeps its own root while admitted sessions drain.
     expect(rootAgentIdForModel("meta/muse-spark-1.2-contributor")).toBe("base3-free-muse-spark");
     expect(rootAgentIdForModel("anthropic/claude-fable-5")).toBe("base3-free-fable");
     // Withdrawn upstream models are unmapped — they fall back, and the backend

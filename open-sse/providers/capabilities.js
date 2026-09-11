@@ -297,6 +297,10 @@ export const PROVIDER_CAPABILITIES = {
     "openai/gpt-5.6-luna":               { vision: true, pdf: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 128000 },
     "upstage/solar-pro4":                { vision: false, reasoning: true, thinkingFormat: "openai", contextWindow: 500000, maxOutput: 100000 },
     "meta/muse-spark-1.2-contributor":   { vision: false, reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 131072 },
+    // 1.3 is the live row (1.2 was retired from the pickers 2026-09-02). Same
+    // Meta card and the same 1,048,576-token context as 1.2, so the window here
+    // stays at the shared value rather than becoming a second number to keep.
+    "meta/muse-spark-1.3-contributor":   { vision: false, reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 131072 },
   },
   // Poolside Laguna — OpenAI-compatible, all reasoning-capable (32K max output).
   "poolside": {
