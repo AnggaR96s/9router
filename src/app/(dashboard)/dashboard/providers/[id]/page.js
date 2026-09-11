@@ -1069,24 +1069,38 @@ export default function ProviderDetailPage() {
     setShowBulkProxyModal(false);
   };
 
-  const applyProxyAssignments = async (assignments) => {
+  const applyProxyAssignments = async (assignments, { mode } = {}) => {
     setBulkUpdatingProxy(true);
     try {
-      let failed = 0;
-      for (const { connectionId, proxyPoolId } of assignments) {
-        try {
-          const res = await fetch(`/api/providers/${connectionId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ proxyPoolId }),
-          });
-          if (!res.ok) failed += 1;
-        } catch (e) {
-          console.log("Error applying proxy for", connectionId, e);
-          failed += 1;
+      // One request for the whole batch. The server does the per-connection
+      // merge inside a single transaction, so 500 accounts is one round trip
+      // instead of 500 — and a failure cannot leave half the batch applied.
+      const res = await fetch("/api/providers/bulk-proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: providerId,
+          mode: mode || "single",
+          proxyPoolId: assignments[0]?.proxyPoolId ?? null,
+          connectionIds: assignments.map((a) => a.connectionId),
+        }),
+      });
+
+      if (!res.ok) {
+        // Endpoint absent (older bundle) or refused the batch — fall back to the
+        // per-row path so the action still works, just slower.
+        if (res.status === 404 || res.status === 405) {
+          await applyProxyAssignmentsRowByRow(assignments);
+        } else {
+          const data = await res.json().catch(() => ({}));
+          alert(data.error || "Failed to apply proxy.");
+        }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        if (Array.isArray(data.missing) && data.missing.length > 0) {
+          alert(`Applied to ${data.updated} connection(s); ${data.missing.length} no longer exist.`);
         }
       }
-      if (failed > 0) alert(`Updated with ${failed} failed request(s).`);
       await fetchConnections();
       setShowBulkProxyModal(false);
     } finally {
@@ -1094,9 +1108,28 @@ export default function ProviderDetailPage() {
     }
   };
 
+  // Kept as the fallback path: one PUT per connection, sequential.
+  const applyProxyAssignmentsRowByRow = async (assignments) => {
+    let failed = 0;
+    for (const { connectionId, proxyPoolId } of assignments) {
+      try {
+        const res = await fetch(`/api/providers/${connectionId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ proxyPoolId }),
+        });
+        if (!res.ok) failed += 1;
+      } catch (e) {
+        console.log("Error applying proxy for", connectionId, e);
+        failed += 1;
+      }
+    }
+    if (failed > 0) alert(`Updated with ${failed} failed request(s).`);
+  };
+
   const handleApplySinglePool = (proxyPoolId) => {
     const targets = connections.map((c) => ({ connectionId: c.id, proxyPoolId }));
-    return applyProxyAssignments(targets);
+    return applyProxyAssignments(targets, { mode: "single" });
   };
 
   const handleApplyOneToOne = () => {
@@ -1109,7 +1142,7 @@ export default function ProviderDetailPage() {
       connectionId: c.id,
       proxyPoolId: activePools[i % activePools.length].id,
     }));
-    return applyProxyAssignments(targets);
+    return applyProxyAssignments(targets, { mode: "one-to-one" });
   };
 
 

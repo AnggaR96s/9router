@@ -253,6 +253,65 @@ export async function reorderProviderConnections(providerId) {
   db.transaction(() => reorderInTx(db, providerId));
 }
 
+/**
+ * Bind (or clear) a proxy pool on many connections at once.
+ *
+ * Why this exists: the dashboard used to issue one PUT per connection in a
+ * sequential loop, so applying a pool to 500 accounts meant 500 round trips and
+ * 500 separate transactions. At ~50ms each that is tens of seconds of the UI
+ * sitting idle, and a failure halfway left the rest unapplied.
+ *
+ * Everything happens in ONE transaction: read the rows, merge the new
+ * `providerSpecificData.proxyPoolId`, upsert, commit. Either the whole batch
+ * lands or none of it does. Rows that disappeared between the read and the
+ * write are reported as `missing` rather than silently skipped.
+ *
+ * `proxyPoolId: null` removes the key (unbind) — matching what the per-row PUT
+ * does with null/"__none__", so bulk and single leave the same stored shape.
+ *
+ * @param {{id: string, proxyPoolId: string|null}[]} updates
+ * @returns {Promise<{updated: number, missing: string[]}>}
+ */
+export async function bulkSetConnectionProxyPool(updates) {
+  const list = Array.isArray(updates) ? updates : [];
+  if (list.length === 0) return { updated: 0, missing: [] };
+
+  const db = await getAdapter();
+  let updated = 0;
+  const missing = [];
+  const now = new Date().toISOString();
+
+  db.transaction(() => {
+    for (const item of list) {
+      const id = item?.id;
+      if (!id) continue;
+      const row = db.get(`SELECT * FROM providerConnections WHERE id = ?`, [id]);
+      if (!row) {
+        missing.push(id);
+        continue;
+      }
+      const existing = rowToConn(row);
+      const next = { ...existing, updatedAt: now };
+      if (item.proxyPoolId === null || item.proxyPoolId === undefined) {
+        // Unbind: drop the key entirely so a stale pool id cannot linger in the
+        // JSON blob and get re-adopted by a later resolve.
+        const psd = { ...(existing.providerSpecificData || {}) };
+        delete psd.proxyPoolId;
+        next.providerSpecificData = psd;
+      } else {
+        next.providerSpecificData = {
+          ...(existing.providerSpecificData || {}),
+          proxyPoolId: item.proxyPoolId,
+        };
+      }
+      upsert(db, next);
+      updated += 1;
+    }
+  });
+
+  return { updated, missing };
+}
+
 export async function cleanupProviderConnections() {
   const db = await getAdapter();
   const fieldsToCheck = [
