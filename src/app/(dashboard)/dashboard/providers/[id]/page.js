@@ -1682,33 +1682,44 @@ export default function ProviderDetailPage() {
                 )}
               </div>
               {providerId === "freebuff" && (
-                <div className="flex flex-wrap items-center gap-2 border-t border-black/[0.03] pt-2 dark:border-white/[0.03] sm:border-t-0 sm:pt-0 dark:border-white/[0.03] sm:border-t-0 sm:pt-0">
-                  <div>
-                    <span className="text-xs text-text-muted font-medium">Strict Model Assignment</span>
-                    <p className="text-[10px] text-text-muted">Only assigned accounts can serve each Freebuff model.</p>
-                  </div>
-                  <Toggle checked={strictModelAssignment} onChange={handleStrictAssignmentToggle} />
-                </div>
-              )}
-              {providerId === "freebuff" && (
-                <div className="flex flex-wrap items-center gap-2 border-t border-black/[0.03] pt-2 dark:border-white/[0.03] sm:border-t-0 sm:pt-0 dark:border-white/[0.03] sm:border-t-0 sm:pt-0">
-                  <div>
-                    <span className="text-xs text-text-muted font-medium">Pacing Gap</span>
-                    <p className="text-[10px] text-text-muted">
-                      Minimum idle gap between two requests on the same account, in seconds. Leave empty for the default (20s).
+                <div className="flex w-full flex-col gap-3 rounded-lg border border-border bg-surface/60 p-3 sm:flex-row sm:items-stretch sm:gap-4">
+                  <div className="flex flex-1 flex-col gap-1.5 border-b border-border/60 pb-3 sm:border-b-0 sm:border-r sm:pb-0 sm:pr-4">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[16px] text-text-muted">shield</span>
+                      <span className="text-xs font-medium text-text-main">Strict Model Assignment</span>
+                      <Toggle size="sm" checked={strictModelAssignment} onChange={handleStrictAssignmentToggle} />
+                    </div>
+                    <p className="text-[10px] leading-relaxed text-text-muted">
+                      Only accounts assigned to a model may serve it.
                     </p>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number"
-                      min={1}
-                      value={pacingGapSeconds}
-                      onChange={(e) => handlePacingGapChange(e.target.value)}
-                      onBlur={(e) => handlePacingGapChange(e.target.value, { commit: true })}
-                      placeholder="20"
-                      className="w-16 px-2 py-1 text-xs border border-border rounded-md bg-background focus:outline-none focus:border-primary"
-                    />
-                    <span className="text-xs text-text-muted">s</span>
+
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2 text-xs font-medium text-text-main">
+                        <span className="material-symbols-outlined text-[16px] text-text-muted">schedule</span>
+                        Pacing Gap
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min={1}
+                          value={pacingGapSeconds}
+                          onChange={(e) => handlePacingGapChange(e.target.value)}
+                          onBlur={(e) => handlePacingGapChange(e.target.value, { commit: true })}
+                          placeholder="20"
+                          aria-label="Pacing gap in seconds"
+                          className="w-16 rounded-md border border-border bg-background px-2 py-1 text-right text-xs tabular-nums focus:border-primary focus:outline-none"
+                        />
+                        <span className="text-xs text-text-muted">sec</span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] leading-relaxed text-text-muted">
+                      Minimum idle gap between two requests on one account.{" "}
+                      {String(pacingGapSeconds).trim() === "" && (
+                        <span className="rounded bg-primary/10 px-1 py-px font-medium text-primary">default 20s</span>
+                      )}
+                    </p>
                   </div>
                 </div>
               )}
