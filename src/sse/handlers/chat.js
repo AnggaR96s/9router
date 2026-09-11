@@ -334,6 +334,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         chatSettings.activeSkills,
         clientRawRequest?.headers?.["x-skill"]?.[0] ?? clientRawRequest?.headers?.["x-skill"]
       ),
+      skillRoutingModes: chatSettings.skillRoutingModes || {},
       ponytailEnabled: !!chatSettings.ponytailEnabled,
       ponytailLevel: chatSettings.ponytailLevel || "full",
       pxpipeEnabled: !!chatSettings.pxpipeEnabled,

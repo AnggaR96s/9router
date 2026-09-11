@@ -51,6 +51,7 @@ const DEFAULT_SETTINGS = {
   dnsToolEnabled: {},
   rtkEnabled: true,
   activeSkills: [],
+  skillRoutingModes: {},
   headroomEnabled: false,
   headroomUrl: DEFAULT_HEADROOM_URL,
   headroomCompressUserMessages: false,

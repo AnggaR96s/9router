@@ -7,5 +7,13 @@
   "hook": "system-prompt",
   "default_enabled": false,
   "updatable": false,
-  "source": "custom"
+  "source": "custom",
+  "keywords": [
+    "commit",
+    "conventional commits",
+    "commit message",
+    "commitlint",
+    "git commit"
+  ],
+  "routing_mode": "always"
 }

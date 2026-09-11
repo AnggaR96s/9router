@@ -107,6 +107,8 @@ export async function getInstalledSkills(options = {}) {
         sourcePath: manifest.source_path || null,
         contentHash: manifest.content_hash || null,
         source: manifest.source || null,
+        keywords: Array.isArray(manifest.keywords) ? manifest.keywords : [],
+        routingMode: ["off", "smart", "always"].includes(manifest.routing_mode) ? manifest.routing_mode : "always",
       });
     } catch {}
   }

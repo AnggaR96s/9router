@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Card, Badge, Toggle } from "@/shared/components";
+import { Card, Badge } from "@/shared/components";
 import { ADDON_SKILLS } from "@/shared/constants/addonSkills";
 
 const ICONS = {
@@ -12,7 +12,7 @@ const ICONS = {
 
 export default function AddonsClient() {
   const [skills, setSkills] = useState(
-    ADDON_SKILLS.map((s) => ({ ...s, enabled: false, updatable: false }))
+    ADDON_SKILLS.map((s) => ({ ...s, mode: "always", updatable: false }))
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -28,6 +28,7 @@ export default function AddonsClient() {
       if (!settingsRes.ok) throw new Error(`Settings ${settingsRes.status}`);
       const settings = await settingsRes.json();
       const activeIds = Array.isArray(settings.activeSkills) ? settings.activeSkills : [];
+      const modes = settings.skillRoutingModes && typeof settings.skillRoutingModes === "object" ? settings.skillRoutingModes : {};
 
       let updatableIds = [];
       if (skillsRes.ok) {
@@ -40,11 +41,13 @@ export default function AddonsClient() {
       }
 
       setSkills((prev) =>
-        prev.map((s) => ({
-          ...s,
-          enabled: activeIds.includes(s.id),
-          updatable: updatableIds.includes(s.id),
-        }))
+        prev.map((s) => {
+          const isActive = activeIds.includes(s.id);
+          // Active skill without a saved mode keeps its manifest default ("always").
+          const savedMode = modes[s.id];
+          const mode = isActive ? (savedMode || "always") : "off";
+          return { ...s, mode, updatable: updatableIds.includes(s.id) };
+        })
       );
       setError(null);
     } catch (e) {
@@ -58,26 +61,26 @@ export default function AddonsClient() {
     load();
   }, [load]);
 
-  const toggleSkill = async (id, next) => {
-    setSkills((prev) => prev.map((s) => (s.id === id ? { ...s, enabled: next } : s)));
-    const activeIds = skills
-      .map((s) => (s.id === id ? { ...s, enabled: next } : s))
-      .filter((s) => s.enabled)
-      .map((s) => s.id);
+  const setSkillMode = async (id, mode) => {
+    const prevSkills = skills;
+    const nextSkills = prevSkills.map((s) => (s.id === id ? { ...s, mode } : s));
+    setSkills(nextSkills);
+    const activeIds = nextSkills.filter((s) => s.mode !== "off").map((s) => s.id);
+    const modes = Object.fromEntries(nextSkills.filter((s) => s.mode !== "off").map((s) => [s.id, s.mode]));
     try {
       const res = await fetch("/api/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ activeSkills: activeIds }),
+        body: JSON.stringify({ activeSkills: activeIds, skillRoutingModes: modes }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch (e) {
       setError(e.message);
-      setSkills((prev) => prev.map((s) => (s.id === id ? { ...s, enabled: !next } : s)));
+      setSkills(prevSkills);
     }
   };
 
-  const activeCount = skills.filter((s) => s.enabled).length;
+  const activeCount = skills.filter((s) => s.mode !== "off").length;
 
   const updateSkill = async (id) => {
     setBusy(id);
@@ -149,19 +152,19 @@ export default function AddonsClient() {
             <div
               key={skill.id}
               className={`relative flex items-center gap-3 p-4 pl-5 rounded-xl border transition-all ${
-                skill.enabled
+                skill.mode !== "off"
                   ? "border-primary/40 bg-primary/5"
                   : "border-border-subtle bg-surface hover:bg-surface-2"
               }`}
             >
               <span
                 className={`absolute left-0 top-3 bottom-3 w-1 rounded-full ${
-                  skill.enabled ? "bg-primary" : "bg-transparent"
+                  skill.mode !== "off" ? "bg-primary" : "bg-transparent"
                 }`}
               />
               <div
                 className={`size-10 rounded-lg flex items-center justify-center shrink-0 ${
-                  skill.enabled ? "bg-primary text-white" : "bg-primary/10 text-primary"
+                  skill.mode !== "off" ? "bg-primary text-white" : "bg-primary/10 text-primary"
                 }`}
               >
                 <span className="material-symbols-outlined text-[20px]">
@@ -172,8 +175,8 @@ export default function AddonsClient() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-semibold text-sm text-text-main">{skill.name}</h3>
-                  {skill.enabled ? (
-                    <Badge variant="primary" size="sm">ACTIVE</Badge>
+                  {skill.mode !== "off" ? (
+                    <Badge variant="primary" size="sm">{skill.mode === "smart" ? "SMART" : "ALWAYS"}</Badge>
                   ) : (
                     <Badge size="sm">OFF</Badge>
                   )}
@@ -215,11 +218,29 @@ export default function AddonsClient() {
                     {busy === skill.id ? "…" : "Update"}
                   </button>
                 )}
-                <Toggle
-                  checked={skill.enabled}
-                  onChange={(next) => toggleSkill(skill.id, next)}
-                  size="sm"
-                />
+                <div className="flex items-center gap-1 p-0.5 rounded-lg border border-border-subtle bg-surface-2">
+                  {["off", "smart", "always"].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setSkillMode(skill.id, m)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium capitalize transition-colors cursor-pointer ${
+                        skill.mode === m
+                          ? "bg-primary text-white shadow-sm"
+                          : "text-text-muted hover:text-text-main"
+                      }`}
+                      title={
+                        m === "off"
+                          ? "Never inject this skill"
+                          : m === "smart"
+                            ? "Inject only when a skill keyword appears in the conversation"
+                            : "Inject on every request"
+                      }
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           ))

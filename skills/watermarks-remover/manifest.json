@@ -10,5 +10,17 @@
   "source_repo": "guillaumemeyer/watermarks-remover",
   "source_branch": "main",
   "source_path": "skills/remove-ai-marks/SKILL.md",
-  "content_hash": "b237721b27ebd0a6051c418fc4d1505a1c9c3ad4b548273314b3b248ab1d079c"
+  "content_hash": "b237721b27ebd0a6051c418fc4d1505a1c9c3ad4b548273314b3b248ab1d079c",
+  "keywords": [
+    "watermark",
+    "c2pa",
+    "synthid",
+    "metadata",
+    "exif",
+    "ai-generated detection",
+    "clean this file",
+    "strip metadata",
+    "steganography"
+  ],
+  "routing_mode": "always"
 }

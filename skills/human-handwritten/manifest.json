@@ -10,5 +10,21 @@
   "source_repo": "miqdadbadjuber/anti-slop",
   "source_branch": "main",
   "source_path": "skills/antislop-copywriting/SKILL.md",
-  "content_hash": "841d89903f670a8bc0ee3d08e6ea6302ff9050d6e0d111af4174d363af64af83"
+  "content_hash": "841d89903f670a8bc0ee3d08e6ea6302ff9050d6e0d111af4174d363af64af83",
+  "keywords": [
+    "copywriting",
+    "copy",
+    "headline",
+    "cta",
+    "landing",
+    "marketing",
+    "rewrite this text",
+    "make it human",
+    "ai-slop",
+    "antislop",
+    "anti-slop",
+    "humanize",
+    "slop"
+  ],
+  "routing_mode": "always"
 }

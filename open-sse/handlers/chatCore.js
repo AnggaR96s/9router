@@ -61,7 +61,7 @@ export function stripContinuityFields(body) {
   return body;
 }
 
-export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, contextPruningEnabled, maxMessagesLimit, semanticCacheEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, activeSkillIds, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking }) {
+export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, contextPruningEnabled, maxMessagesLimit, semanticCacheEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, activeSkillIds, skillRoutingModes, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking }) {
   const { provider, model } = modelInfo;
   const requestStartTime = Date.now();
   // Stable per-session color so all lines of one CLI conversation share a tag
@@ -310,7 +310,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   }
 
   // Add-on skills: inject active system-prompt skills (dashboard toggles / x-skill header)
-  const injectedSkills = await injectActiveSkills(translatedBody, finalFormat, activeSkillIds);
+  const injectedSkills = await injectActiveSkills(translatedBody, finalFormat, activeSkillIds, skillRoutingModes);
   for (const sid of injectedSkills) xf.push("SKILL:" + sid);
 
   // PXPIPE: image bulky context (Claude-format bodies only), last saver before dispatch
