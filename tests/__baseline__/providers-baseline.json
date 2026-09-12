@@ -132,6 +132,9 @@
       "HTTP-Referer": "https://cline.bot",
       "X-Title": "Cline"
     },
+    "quirks": {
+      "clineEnvelope": true
+    },
     "tokenUrl": "https://api.cline.bot/api/v1/auth/token",
     "refreshUrl": "https://api.cline.bot/api/v1/auth/refresh",
     "auth": {
@@ -149,6 +152,9 @@
     "headers": {
       "HTTP-Referer": "https://cline.bot",
       "X-Title": "Cline"
+    },
+    "quirks": {
+      "clineEnvelope": true
     },
     "auth": {
       "combined": true,
@@ -241,6 +247,12 @@
     "validateUrl": "https://api.deepseek.com/models",
     "reasoningInject": {
       "scope": "all"
+    },
+    "quirks": {
+      "claudeSupportedToolTypes": [
+        "web_search_20250305",
+        "web_search_20260209"
+      ]
     },
     "format": "openai",
     "transports": [
@@ -440,7 +452,8 @@
     "baseUrl": "https://api.groq.com/openai/v1/chat/completions",
     "validateUrl": "https://api.groq.com/openai/v1/models",
     "usage": {
-      "url": "https://api.groq.com/openai/v1/models"
+      "url": "https://api.groq.com/openai/v1/chat/completions",
+      "modelsUrl": "https://api.groq.com/openai/v1/models"
     },
     "format": "openai"
   },
@@ -575,7 +588,8 @@
       "Anthropic-Beta": "claude-code-20250219,interleaved-thinking-2025-05-14"
     },
     "quirks": {
-      "dropOutputConfig": true
+      "dropOutputConfig": true,
+      "requireClaudeToolType": true
     },
     "reasoningInject": {
       "scope": "all"
@@ -626,7 +640,8 @@
       "Anthropic-Beta": "claude-code-20250219,interleaved-thinking-2025-05-14"
     },
     "quirks": {
-      "dropOutputConfig": true
+      "dropOutputConfig": true,
+      "requireClaudeToolType": true
     },
     "reasoningInject": {
       "scope": "all"
@@ -956,6 +971,7 @@
       "HTTP-Referer": "https://endpoint-proxy.local",
       "X-Title": "Endpoint Proxy"
     },
+    "forceStream": true,
     "format": "openai"
   },
   "baidu": {
@@ -1035,6 +1051,9 @@
     },
     "usage": {
       "url": "https://www.codebuff.com/api/v1/freebuff/session"
+    },
+    "pacing": {
+      "gapSeconds": 20
     }
   },
   "aihorde": {
@@ -1094,6 +1113,21 @@
     "baseUrl": "https://api.apinex.bond/v1/chat/completions",
     "modelsUrl": "https://api.apinex.bond/v1/models",
     "validateUrl": "https://api.apinex.bond/v1/models",
+    "thinkingFormat": "openai",
+    "format": "openai"
+  },
+  "qwen": {
+    "baseUrl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+    "headers": {},
+    "quirks": {
+      "preserveCacheControl": true
+    },
+    "format": "openai"
+  },
+  "unikey": {
+    "baseUrl": "https://www.getunikey.ai/v1/chat/completions",
+    "modelsUrl": "https://www.getunikey.ai/v1/models",
+    "validateUrl": "https://www.getunikey.ai/v1/models",
     "thinkingFormat": "openai",
     "format": "openai"
   }

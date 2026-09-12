@@ -15,6 +15,7 @@ import { fetchTokenharborModels } from "./tokenharbor.js";
 import { fetchNousModels } from "./nous.js";
 import { fetchOrcarouterModels } from "./orcarouter.js";
 import { fetchApinexModels } from "./apinex.js";
+import { fetchUnikeyModels } from "./unikey.js";
 import { resolveCursorModels } from "open-sse/services/cursorModels.js";
 import { normalizeDiscoveredModels } from "@/shared/utils/modelTokenLimits";
 import { resolveClineModels, resolveClinepassModels } from "open-sse/services/clinepassModels.js";
@@ -521,6 +522,16 @@ const PROVIDER_MODELS_CONFIG = {
       if (result.error) return result;
       if (!result.models.length) {
         return { models: [], warning: "APInex returned no live models; falling back to static catalog." };
+      }
+      return result;
+    },
+  },
+  unikey: {
+    customResolver: async (connection) => {
+      const result = await fetchUnikeyModels(connection.apiKey);
+      if (result.error) return result;
+      if (!result.models.length) {
+        return { models: [], warning: "UniKey returned no live models; falling back to static catalog." };
       }
       return result;
     },
