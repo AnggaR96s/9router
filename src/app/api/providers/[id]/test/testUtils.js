@@ -883,8 +883,53 @@ case "llm7": {
         }, effectiveProxy);
         return { valid: res.ok, error: res.ok ? null : "Invalid API key", refreshed: false };
       }
-      default:
+      default: {
+        // Generic fallback: any provider whose registry entry declares a validateUrl
+        // can be tested without a bespoke case. 13 providers were stuck on
+        // "Provider test not supported" purely because nobody had written a case for
+        // them, even though the registry already knew how to reach them — poolside,
+        // venice, sambanova, featherless, kilo-gateway and friends. Validating the
+        // URL with the key is exactly what the bespoke cases below do, so this is the
+        // same probe with the URL taken from config instead of hardcoded.
+        //
+        // Providers with no validateUrl (audio/image/search/embedding vendors, whose
+        // APIs are not GET /models-shaped) still fall through to the explicit error —
+        // a wrong probe would report a working key as broken.
+        const validateUrl = PROVIDERS[connection.provider]?.validateUrl;
+        if (validateUrl) {
+          const res = await fetchWithConnectionProxy(validateUrl, {
+            headers: { Authorization: `Bearer ${connection.apiKey}` },
+          }, effectiveProxy);
+          // 401/403 mean the key was refused; 404 means the configured URL is wrong
+          // rather than the key. Only those three count as a failure — a 200 is the
+          // clean pass, and anything else (e.g. 429 rate limit, 5xx) proves the
+          // endpoint answered and the key was not rejected, which is all a models
+          // probe can establish.
+          if (res.status === 401 || res.status === 403) {
+            return { valid: false, error: "Invalid API key" };
+          }
+          if (res.status === 404) {
+            return { valid: false, error: "Models endpoint not found" };
+          }
+          // Some upstreams serve /v1/models publicly, so a 200 would otherwise be read
+          // as "key accepted" when the endpoint never looked at it (checked live:
+          // venice, sambanova, kilo-gateway, api-airforce all answer 200 to a garbage
+          // key). Re-probe without credentials to tell the two apart, and report a
+          // soft warning instead of a false pass when the list is open. The connection
+          // still counts as reachable — we simply cannot vouch for the key from here.
+          if (res.status === 200) {
+            const anon = await fetchWithConnectionProxy(validateUrl, {}, effectiveProxy);
+            if (anon.status === 200) {
+              return {
+                valid: true,
+                warning: "Endpoint reachable, but the provider serves its model list publicly — the API key could not be verified.",
+              };
+            }
+          }
+          return { valid: true, error: null };
+        }
         return { valid: false, error: "Provider test not supported" };
+      }
     }
   } catch (err) {
     return { valid: false, error: err.message };
