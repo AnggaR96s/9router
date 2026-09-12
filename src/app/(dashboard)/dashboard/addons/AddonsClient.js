@@ -151,7 +151,12 @@ export default function AddonsClient() {
           skills.map((skill) => (
             <div
               key={skill.id}
-              className={`relative flex items-center gap-3 p-4 pl-5 rounded-xl border transition-all ${
+              // Stacked on phones, one row from sm up. Measured before this:
+              // at 320px the fixed-width control cluster (162px) squeezed the
+              // text column to 23.9px — about one character wide — and the
+              // description spilled out of its box. Below sm the controls drop
+              // to their own full-width line instead of competing for space.
+              className={`relative flex flex-col gap-3 p-4 pl-5 rounded-xl border transition-all sm:flex-row sm:items-center sm:gap-3 ${
                 skill.mode !== "off"
                   ? "border-primary/40 bg-primary/5"
                   : "border-border-subtle bg-surface hover:bg-surface-2"
@@ -162,54 +167,63 @@ export default function AddonsClient() {
                   skill.mode !== "off" ? "bg-primary" : "bg-transparent"
                 }`}
               />
-              <div
-                className={`size-10 rounded-lg flex items-center justify-center shrink-0 ${
-                  skill.mode !== "off" ? "bg-primary text-white" : "bg-primary/10 text-primary"
-                }`}
-              >
-                <span className="material-symbols-outlined text-[20px]">
-                  {ICONS[skill.id] || "auto_fix_high"}
-                </span>
-              </div>
+              {/* Icon + text share one flexible group so the icon cannot be
+                  pushed away from the text it labels on either layout. */}
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <div
+                  className={`size-10 rounded-lg flex items-center justify-center shrink-0 ${
+                    skill.mode !== "off" ? "bg-primary text-white" : "bg-primary/10 text-primary"
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[20px]">
+                    {ICONS[skill.id] || "auto_fix_high"}
+                  </span>
+                </div>
 
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-semibold text-sm text-text-main">{skill.name}</h3>
-                  {skill.mode !== "off" ? (
-                    <Badge variant="primary" size="sm">{skill.mode === "smart" ? "SMART" : "ALWAYS"}</Badge>
-                  ) : (
-                    <Badge size="sm">OFF</Badge>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold text-sm text-text-main">{skill.name}</h3>
+                    {skill.mode !== "off" ? (
+                      <Badge variant="primary" size="sm">{skill.mode === "smart" ? "SMART" : "ALWAYS"}</Badge>
+                    ) : (
+                      <Badge size="sm">OFF</Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-text-muted mt-0.5 leading-relaxed break-words">
+                    {skill.description}
+                  </p>
+                  <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                    <code className="text-[10px] text-text-muted/80 font-mono break-all">
+                      x-skill: {skill.id}
+                    </code>
+                  </div>
+                  {toast?.id === skill.id && (
+                    <p
+                      className={`text-[11px] mt-1.5 ${
+                        toast.kind === "ok"
+                          ? "text-green-400"
+                          : toast.kind === "err"
+                            ? "text-red-400"
+                            : "text-text-muted"
+                      }`}
+                    >
+                      {toast.msg}
+                    </p>
                   )}
                 </div>
-                <p className="text-xs text-text-muted mt-0.5 leading-relaxed">
-                  {skill.description}
-                </p>
-                <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-                  <code className="text-[10px] text-text-muted/80 font-mono">
-                    x-skill: {skill.id}
-                  </code>
-                </div>
-                {toast?.id === skill.id && (
-                  <p
-                    className={`text-[11px] mt-1.5 ${
-                      toast.kind === "ok"
-                        ? "text-green-400"
-                        : toast.kind === "err"
-                          ? "text-red-400"
-                          : "text-text-muted"
-                    }`}
-                  >
-                    {toast.msg}
-                  </p>
-                )}
               </div>
 
-              <div className="flex flex-col items-end gap-2 shrink-0">
+              {/* Phones: Update and the mode switch share one full-width line.
+                  Desktop: back to a stacked, right-aligned column — justify-end
+                  (not -between) so the two controls stack instead of sitting
+                  side by side, which would widen this block by the Update
+                  button's width and steal it from the description. */}
+              <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:flex-col sm:items-end sm:justify-end sm:shrink-0">
                 {skill.updatable && (
                   <button
                     onClick={() => updateSkill(skill.id)}
                     disabled={busy === skill.id}
-                    className="px-2 py-1 rounded-md border border-border-subtle text-text-muted text-[11px] hover:border-primary/40 hover:text-primary transition-colors cursor-pointer inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-2 py-1 rounded-md border border-border-subtle text-text-muted text-[11px] hover:border-primary/40 hover:text-primary transition-colors cursor-pointer inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                     title="Check and update the prompt from its source repo"
                   >
                     <span className="material-symbols-outlined text-[13px]">
@@ -218,7 +232,7 @@ export default function AddonsClient() {
                     {busy === skill.id ? "…" : "Update"}
                   </button>
                 )}
-                <div className="flex items-center gap-1 p-0.5 rounded-lg border border-border-subtle bg-surface-2">
+                <div className="flex items-center gap-1 p-0.5 rounded-lg border border-border-subtle bg-surface-2 shrink-0">
                   {["off", "smart", "always"].map((m) => (
                     <button
                       key={m}
