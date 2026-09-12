@@ -77,6 +77,10 @@ export function createSSEStream(options = {}) {
   let openAIResponsesDoneSent = false;
   let streamDoneSent = false;  // track duplicate [DONE] across transform + flush
   let finalized = false;
+  // Set when a terminal chunk (finish_reason / message_delta) has been emitted. Lets
+  // the transform loop finalize without waiting for [DONE] or flush(): a client that
+  // disconnects right after the finish chunk cancels the reader, and flush() never runs.
+  let terminalChunkSeen = false;
 
   // Usage/logging tail, callable from transform() as well as flush(): a client that
   // closes right after the terminal event cancels the reader, and flush() never runs.
@@ -202,6 +206,7 @@ export function createSSEStream(options = {}) {
               responsesTerminal = isOpenAIResponsesTerminalEvent(currentOpenAIResponsesEvent, parsed);
 
               const isFinishChunk = parsed.choices?.[0]?.finish_reason;
+              if (isFinishChunk) terminalChunkSeen = true;
               if (isFinishChunk && !hasValidUsage(parsed.usage)) {
                 const estimated = estimateUsage(body, totalContentLength, FORMATS.OPENAI);
                 parsed.usage = filterUsageForFormat(estimated, FORMATS.OPENAI);
@@ -237,6 +242,13 @@ export function createSSEStream(options = {}) {
           controller.enqueue(sharedEncoder.encode(output));
           // Responses clients (codex CLI) close on response.completed instead of [DONE]
           if (responsesTerminal) finalizeStream();
+          // Passthrough terminal sentinel. A client that closes right here cancels the
+          // reader, so flush() never runs — finalize now while usage is still in hand.
+          // finalizeStream() is idempotent, so a later flush() cannot double count.
+          if (trimmed === "data: [DONE]" || trimmed === "data:[DONE]" || trimmed === "[DONE]") {
+            streamDoneSent = true;
+            finalizeStream();
+          }
           continue;
         }
 
@@ -276,6 +288,12 @@ export function createSSEStream(options = {}) {
           }
           streamDoneSent = true;
           if (keepsOpenAIResponsesFormat) openAIResponsesDoneSent = true;
+          // The [DONE] sentinel is the last thing a client reads before it hangs up.
+          // A client that closes here cancels the reader, so flush() never runs and the
+          // usage we just accumulated would never be logged or persisted (production saw
+          // ~78% of one provider's tokens lost this way). Finalize now instead.
+          // finalizeStream() is idempotent, so a later flush() cannot double count.
+          finalizeStream();
           continue;
         }
 
@@ -355,6 +373,7 @@ export function createSSEStream(options = {}) {
 
             // Inject estimated usage if finish chunk has no valid usage
             const isFinishChunk = item.type === "message_delta" || item.choices?.[0]?.finish_reason;
+            if (isFinishChunk) terminalChunkSeen = true;
             if (state.finishReason && isFinishChunk && !hasValidUsage(item.usage) && totalContentLength > 0) {
               const estimated = estimateUsage(body, totalContentLength, sourceFormat);
               item.usage = filterUsageForFormat(estimated, sourceFormat); // Filter + already has buffer
@@ -370,6 +389,13 @@ export function createSSEStream(options = {}) {
             controller.enqueue(sharedEncoder.encode(output));
             sseEmittedCount++;
           }
+        }
+
+        // A finished stream that never sends [DONE] (provider cut off, or a client that
+        // only waits for finish_reason): finalize once the terminal chunk has gone out,
+        // so its usage is not lost when the client disconnects instead of flushing.
+        if (terminalChunkSeen) {
+          finalizeStream();
         }
       }
     },
