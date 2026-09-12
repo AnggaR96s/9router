@@ -118,16 +118,16 @@ describe("UniKey usage handler", () => {
     const { getUnikeyUsage } = await import("../../open-sse/services/usage/unikey.js");
     const out = await getUnikeyUsage("sk-test");
 
-    expect(out.quotas["Spent (credits)"].used).toBeCloseTo(6.58, 6);
+    expect(out.quotas.Credits.used).toBeCloseTo(6.58, 6);
     vi.unstubAllGlobals();
   });
 
-  it("reports spend only — and explains why — when no total is configured", async () => {
-    // The API key cannot read the remaining balance (it lives behind a dashboard
-    // session), so without a configured total the handler must not invent one.
+  it("computes Remaining as grant minus spend, defaulting the grant to 5000", async () => {
+    // UniKey's standard free grant. Verified against the account: 5000 - 4843.64 spent
+    // = 156.36, which is exactly the remaining balance the relay itself quoted.
     vi.stubGlobal("fetch", vi.fn(async (url) => {
       if (String(url).endsWith("/usage")) {
-        return { ok: true, status: 200, json: async () => ({ object: "list", total_usage: 4.059 }) };
+        return { ok: true, status: 200, json: async () => ({ object: "list", total_usage: 48.4364 }) };
       }
       return { ok: true, status: 200, json: async () => ({ object: "billing_subscription", has_payment_method: true }) };
     }));
@@ -135,44 +135,121 @@ describe("UniKey usage handler", () => {
     const { getUnikeyUsage } = await import("../../open-sse/services/usage/unikey.js");
     const out = await getUnikeyUsage("sk-test");
 
-    expect(out.quotas["Spent (credits)"].used).toBeCloseTo(405.9, 4);
-    expect(out.quotas["Remaining (credits)"]).toBeUndefined();
-    expect(out.message).toMatch(/cannot read the remaining balance/i);
+    expect(out.quotas.Credits.total).toBe(5000);
+    expect(out.quotas.Credits.used).toBeCloseTo(4843.64, 2);
+    expect(out.quotas.Credits.remaining).toBeCloseTo(156.36, 2);
+    expect(Object.keys(out.quotas)).toEqual(["Credits"]);
     vi.unstubAllGlobals();
   });
 
-  it("derives Remaining from the configured total credit grant", async () => {
+  it("honours a configured grant override", async () => {
     vi.stubGlobal("fetch", vi.fn(async (url) => {
       if (String(url).endsWith("/usage")) {
-        return { ok: true, status: 200, json: async () => ({ object: "list", total_usage: 4.059 }) };
+        return { ok: true, status: 200, json: async () => ({ object: "list", total_usage: 10 }) };
       }
       return { ok: true, status: 200, json: async () => ({ object: "billing_subscription", has_payment_method: true }) };
     }));
     vi.resetModules();
     const { getUnikeyUsage } = await import("../../open-sse/services/usage/unikey.js");
-    // 5399.32 total credits = 405.9 spent + 4993.42 shown remaining on the dashboard.
-    const out = await getUnikeyUsage("sk-test", { unikeyTotalCredits: 5399.32 });
+    const out = await getUnikeyUsage("sk-test", { unikeyTotalCredits: 20000 });
 
-    expect(out.quotas.Credits).toBeDefined();
-    expect(out.quotas.Credits.used).toBeCloseTo(405.9, 4);
-    expect(out.quotas.Credits.remaining).toBeCloseTo(4993.42, 2);
-    expect(out.quotas.Credits.unlimited).toBe(false);
-    // One row only — spend and remaining describe the same pot, so shipping both
-    // would render the same numbers twice.
-    expect(Object.keys(out.quotas)).toEqual(["Credits"]);
-    expect(out.message).toBeUndefined();
+    expect(out.quotas.Credits.total).toBe(20000);
+    expect(out.quotas.Credits.remaining).toBeCloseTo(19000, 2);
+    vi.unstubAllGlobals();
+  });
+
+  it("never reports a negative balance when spend exceeds the grant", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url) => {
+      if (String(url).endsWith("/usage")) {
+        return { ok: true, status: 200, json: async () => ({ object: "list", total_usage: 9999 }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ object: "billing_subscription", has_payment_method: true }) };
+    }));
+    vi.resetModules();
+    const { getUnikeyUsage } = await import("../../open-sse/services/usage/unikey.js");
+    const out = await getUnikeyUsage("sk-test");
+
+    expect(out.quotas.Credits.remaining).toBe(0);
+    expect(out.quotas.Credits.remainingPercentage).toBe(0);
+    vi.unstubAllGlobals();
+  });
+
+  it("reads the exact balance out of a pre-charge rejection message", async () => {
+    // The relay refuses the call and names the remaining amount. Matching both the
+    // Chinese original and an English variant keeps a locale change from silently
+    // breaking the read.
+    const { parseRemainingFromError } = await import("../../open-sse/services/usage/unikey.js");
+    expect(parseRemainingFromError(
+      "预扣费额度失败, 用户剩余额度: Credits156.360000, 需要预扣费额度: Credits2500.000000",
+    )).toBeCloseTo(156.36, 2);
+    expect(parseRemainingFromError(
+      "pre-charge failed, user remaining quota: Credits 42.5, required: Credits 2500",
+    )).toBeCloseTo(42.5, 2);
+    expect(parseRemainingFromError("model not found")).toBeNull();
+    expect(parseRemainingFromError(null)).toBeNull();
+    expect(parseRemainingFromError("")).toBeNull();
+  });
+
+  it("only probes the relay when the connection opts in", async () => {
+    const { shouldProbeBalance } = await import("../../open-sse/services/usage/unikey.js");
+    expect(shouldProbeBalance({})).toBe(false);
+    expect(shouldProbeBalance(null)).toBe(false);
+    expect(shouldProbeBalance({ unikeyProbeBalance: false })).toBe(false);
+    expect(shouldProbeBalance({ unikeyProbeBalance: true })).toBe(true);
+  });
+
+  it("uses the probed balance when probing is enabled", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url) => {
+      if (String(url).includes("/chat/completions")) {
+        // The deliberate rejection we read the balance from. Nothing is billed.
+        return {
+          ok: false, status: 403, text: async () => JSON.stringify({
+            error: { message: "预扣费额度失败, 用户剩余额度: Credits777.250000, 需要预扣费额度: Credits2500.000000" },
+          }),
+        };
+      }
+      if (String(url).endsWith("/usage")) {
+        return { ok: true, status: 200, json: async () => ({ object: "list", total_usage: 48.4364 }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ object: "billing_subscription", has_payment_method: true }) };
+    }));
+    vi.resetModules();
+    const { getUnikeyUsage } = await import("../../open-sse/services/usage/unikey.js");
+    const out = await getUnikeyUsage("sk-test", { unikeyProbeBalance: true });
+
+    // Probed value wins over the arithmetic (which would have said 156.36).
+    expect(out.quotas.Credits.remaining).toBeCloseTo(777.25, 2);
+    vi.unstubAllGlobals();
+  });
+
+  it("falls back to the computed balance when the probe yields nothing", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url) => {
+      if (String(url).includes("/chat/completions")) {
+        return { ok: false, status: 400, text: async () => JSON.stringify({ error: { message: "model not found" } }) };
+      }
+      if (String(url).endsWith("/usage")) {
+        return { ok: true, status: 200, json: async () => ({ object: "list", total_usage: 48.4364 }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ object: "billing_subscription", has_payment_method: true }) };
+    }));
+    vi.resetModules();
+    const { getUnikeyUsage } = await import("../../open-sse/services/usage/unikey.js");
+    const out = await getUnikeyUsage("sk-test", { unikeyProbeBalance: true });
+
+    expect(out.quotas.Credits.remaining).toBeCloseTo(156.36, 2);
     vi.unstubAllGlobals();
   });
 
   it("accepts the configured total as a numeric string and rejects junk", async () => {
     const { parseConfiguredTotalCredits } = await import("../../open-sse/services/usage/unikey.js");
-    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: "5399.32" })).toBeCloseTo(5399.32, 2);
-    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: 5399.32 })).toBeCloseTo(5399.32, 2);
-    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: "" })).toBeNull();
-    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: "abc" })).toBeNull();
-    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: 0 })).toBeNull();
-    expect(parseConfiguredTotalCredits({})).toBeNull();
-    expect(parseConfiguredTotalCredits(null)).toBeNull();
+    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: "10000" })).toBe(10000);
+    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: 10000 })).toBe(10000);
+    // Anything unusable falls back to the standard grant rather than zero.
+    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: "" })).toBe(5000);
+    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: "abc" })).toBe(5000);
+    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: 0 })).toBe(5000);
+    expect(parseConfiguredTotalCredits({})).toBe(5000);
+    expect(parseConfiguredTotalCredits(null)).toBe(5000);
   });
 
   it("reports auth failure on 401 instead of returning empty quotas", async () => {
