@@ -510,6 +510,16 @@ export function createSSEStream(options = {}) {
         console.log("Error in flush:", error);
         finalizeStream();
       }
+    },
+
+    // A client can also leave mid-stream (aborted request, navigation, timeout) — the
+    // reader is cancelled and flush() never runs, so anything accumulated so far would
+    // be dropped. Node does call cancel() in that case (verified), and finalizeStream()
+    // is idempotent, so recording here cannot double count with flush() or the
+    // terminal-marker paths above. Without this, an aborted stream kept the
+    // start-of-stream placeholder row (tokens 0) forever.
+    cancel() {
+      finalizeStream();
     }
   });
 }

@@ -185,6 +185,38 @@ describe("streaming usage survives a client that disconnects right after [DONE]"
     expect(calls, "usage must be recorded once, not once per finalize path").toBe(1);
   });
 
+  it("records usage when the client aborts mid-stream (no terminal event at all)", async () => {
+    // The reader is cancelled before the stream ever ends. Node calls the transformer's
+    // cancel() and NOT flush() (verified), so without a cancel handler the accumulated
+    // usage is dropped and the placeholder row stays at zero forever.
+    const encoder = new TextEncoder();
+    let completed = null;
+
+    const source = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(OPENAI_TEXT_CHUNK("Hello there")));
+        // deliberately never closed: simulates a provider still streaming
+      },
+    });
+
+    const stream = source.pipeThrough(
+      createSSETransformStreamWithLogger(
+        FORMATS.OPENAI, FORMATS.OPENAI, "tokenharbor", null, null,
+        "deepseek-v4.1-flash:free", "conn-1",
+        { messages: [{ role: "user", content: "hi" }] },
+        (_c, usage) => { completed = usage || "CALLED_WITHOUT_USAGE"; },
+        "sk-test",
+      ),
+    );
+
+    const reader = stream.getReader();
+    await reader.read();
+    await reader.cancel("client went away");
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(completed, "aborted stream lost its usage entirely").not.toBeNull();
+  });
+
   it("records an estimated usage tail when the provider sends no usage at all", async () => {
     const input =
       OPENAI_TEXT_CHUNK("a fairly long piece of content to estimate from") + "data: [DONE]\n\n";
