@@ -65,7 +65,7 @@ const USAGE_HANDLERS = {
   zed: (c) => getZedUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
   freebuff: (c) => getFreebuffUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
   apinex: (c) => getApinexUsage(c.apiKey, c.proxyOptions),
-  unikey: (c) => getUnikeyUsage(c.apiKey, c.proxyOptions),
+  unikey: (c) => getUnikeyUsage(c.apiKey, c.providerSpecificData, c.proxyOptions),
 };
 
 export async function getUsageForProvider(connection, proxyOptions = null, options = {}) {

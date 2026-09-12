@@ -105,27 +105,74 @@ describe("UniKey usage handler", () => {
     expect(out.message).toMatch(/API key not available/i);
   });
 
-  it("surfaces spend as an unlimited credit pot, not a 0% progress bar", async () => {
-    // The relay's soft limit is effectively uncapped (1e8 USD on the verified account),
-    // so a percentage bar would always read 0%. Spend is what the user wants to see.
+  it("converts spend from USD to credits at 100x (verified against the dashboard)", async () => {
+    // The dashboard showed 24h usage of 6.58 credits while the API reported
+    // total_usage 0.0658, so the relay bills in USD and displays credits at x100.
     vi.stubGlobal("fetch", vi.fn(async (url) => {
       if (String(url).endsWith("/usage")) {
-        return { ok: true, status: 200, json: async () => ({ object: "list", total_usage: 0.3504 }) };
+        return { ok: true, status: 200, json: async () => ({ object: "list", total_usage: 0.0658 }) };
       }
-      return {
-        ok: true, status: 200,
-        json: async () => ({ object: "billing_subscription", has_payment_method: true, hard_limit_usd: 100000000 }),
-      };
+      return { ok: true, status: 200, json: async () => ({ object: "billing_subscription", has_payment_method: true }) };
     }));
     vi.resetModules();
     const { getUnikeyUsage } = await import("../../open-sse/services/usage/unikey.js");
     const out = await getUnikeyUsage("sk-test");
 
-    expect(out.quotas["Spent (USD)"]).toBeDefined();
-    expect(out.quotas["Spent (USD)"].used).toBeCloseTo(0.3504, 6);
-    expect(out.quotas["Spent (USD)"].unlimited).toBe(true);
-    expect(out.quotas["Account limit (USD)"].total).toBe(100000000);
+    expect(out.quotas["Spent (credits)"].used).toBeCloseTo(6.58, 6);
     vi.unstubAllGlobals();
+  });
+
+  it("reports spend only — and explains why — when no total is configured", async () => {
+    // The API key cannot read the remaining balance (it lives behind a dashboard
+    // session), so without a configured total the handler must not invent one.
+    vi.stubGlobal("fetch", vi.fn(async (url) => {
+      if (String(url).endsWith("/usage")) {
+        return { ok: true, status: 200, json: async () => ({ object: "list", total_usage: 4.059 }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ object: "billing_subscription", has_payment_method: true }) };
+    }));
+    vi.resetModules();
+    const { getUnikeyUsage } = await import("../../open-sse/services/usage/unikey.js");
+    const out = await getUnikeyUsage("sk-test");
+
+    expect(out.quotas["Spent (credits)"].used).toBeCloseTo(405.9, 4);
+    expect(out.quotas["Remaining (credits)"]).toBeUndefined();
+    expect(out.message).toMatch(/cannot read the remaining balance/i);
+    vi.unstubAllGlobals();
+  });
+
+  it("derives Remaining from the configured total credit grant", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url) => {
+      if (String(url).endsWith("/usage")) {
+        return { ok: true, status: 200, json: async () => ({ object: "list", total_usage: 4.059 }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ object: "billing_subscription", has_payment_method: true }) };
+    }));
+    vi.resetModules();
+    const { getUnikeyUsage } = await import("../../open-sse/services/usage/unikey.js");
+    // 5399.32 total credits = 405.9 spent + 4993.42 shown remaining on the dashboard.
+    const out = await getUnikeyUsage("sk-test", { unikeyTotalCredits: 5399.32 });
+
+    expect(out.quotas.Credits).toBeDefined();
+    expect(out.quotas.Credits.used).toBeCloseTo(405.9, 4);
+    expect(out.quotas.Credits.remaining).toBeCloseTo(4993.42, 2);
+    expect(out.quotas.Credits.unlimited).toBe(false);
+    // One row only — spend and remaining describe the same pot, so shipping both
+    // would render the same numbers twice.
+    expect(Object.keys(out.quotas)).toEqual(["Credits"]);
+    expect(out.message).toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+
+  it("accepts the configured total as a numeric string and rejects junk", async () => {
+    const { parseConfiguredTotalCredits } = await import("../../open-sse/services/usage/unikey.js");
+    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: "5399.32" })).toBeCloseTo(5399.32, 2);
+    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: 5399.32 })).toBeCloseTo(5399.32, 2);
+    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: "" })).toBeNull();
+    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: "abc" })).toBeNull();
+    expect(parseConfiguredTotalCredits({ unikeyTotalCredits: 0 })).toBeNull();
+    expect(parseConfiguredTotalCredits({})).toBeNull();
+    expect(parseConfiguredTotalCredits(null)).toBeNull();
   });
 
   it("reports auth failure on 401 instead of returning empty quotas", async () => {
@@ -137,3 +184,47 @@ describe("UniKey usage handler", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("UniKey static model catalog", () => {
+  it("ships only chat-capable ids (the non-chat ones reject this endpoint)", async () => {
+    // /v1/models advertises 44 ids, but 12 of them are image/video/embedding models
+    // that answer POST /v1/chat/completions with 400 ("is a video generation model",
+    // "does not support this endpoint"), so they are deliberately excluded.
+    const { default: unikey } = await import("../../open-sse/providers/registry/unikey.js");
+    expect(unikey.models.length).toBe(32);
+
+    const ids = unikey.models.map((m) => m.id);
+    expect(new Set(ids).size, "duplicate ids in the static list").toBe(ids.length);
+
+    const nonChat = ids.filter((id) => /kling|seedance|seedream|gpt-image|bge-m3|hailuo|qwen-image|grok-imagine|gemini-3\.1-flash-image/.test(id));
+    expect(nonChat, "image/video/embedding ids cannot serve chat").toEqual([]);
+
+    expect(ids).toContain("gpt-5.6-luna");
+    expect(ids).toContain("claude-opus-4-8");
+    expect(ids).toContain("x-ai/grok-4.3");
+    expect(ids).toContain("google/gemini-3.5-flash");
+  });
+
+  it("gives every model a display name", async () => {
+    const { default: unikey } = await import("../../open-sse/providers/registry/unikey.js");
+    const nameless = unikey.models.filter((m) => !m.name || !String(m.name).trim());
+    expect(nameless.map((m) => m.id)).toEqual([]);
+  });
+
+  it("keeps the static list registered into PROVIDER_MODELS", async () => {
+    const { PROVIDER_MODELS } = await import("../../open-sse/providers/index.js");
+    expect(Array.isArray(PROVIDER_MODELS.unikey)).toBe(true);
+    expect(PROVIDER_MODELS.unikey.length).toBe(32);
+  });
+});
+
+describe("UniKey usage wiring", () => {
+  it("passes providerSpecificData through so the optional total can be read", async () => {
+    // Without this argument the configured total would be invisible to the handler
+    // and Remaining could never be shown.
+    const { readFile } = await import("node:fs/promises");
+    const src = await readFile("/home/ubuntu/9router/open-sse/services/usage.js", "utf8");
+    expect(src).toMatch(/unikey:\s*\(c\)\s*=>\s*getUnikeyUsage\(c\.apiKey,\s*c\.providerSpecificData/);
+  });
+});
+
