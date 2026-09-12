@@ -1,3 +1,77 @@
+# v0.1.11 (2026-09-13)
+
+## Features
+
+- **New provider: UniKey (`getunikey.ai`)** — a wallet-funded relay whose credit
+  balance is readable from the API key alone. The catalog is narrowed to the 32
+  chat-capable models; video, image and embedding ids the relay also advertises
+  are excluded because they reject `/v1/chat/completions`. Usage is billed in
+  **credits** (1 credit = 0.01 USD, the relay's own unit) with the daily and
+  remaining figures derived from spend, so the dashboard shows a real Remaining
+  instead of only a spend total. A `unikeyTotalCredits` override on the
+  connection sets the grant when it differs from the default 5000, and
+  `unikeyProbeBalance: true` reads the exact figure from the relay instead.
+- **Any provider whose registry declares a `validateUrl` can now be tested from
+  the dashboard.** "Test connection" was a `switch` with a hand-written case per
+  provider, so 41 of 69 API-key providers fell through to `default` and answered
+  "Provider test not supported" — including poolside, venice, sambanova,
+  featherless, kilo-gateway, bazaarlink, bluesminds, morph, baidu, tencent,
+  perplexity-agent, api-airforce and xquik. The fallback probes the declared URL
+  with the key, and performs a **second anonymous probe**: six of those endpoints
+  serve their model list to anyone, so a 200 alone would have reported a junk key
+  as valid. When the anonymous probe also succeeds the connection is marked
+  active with a warning saying the key could not be verified, rather than a false
+  pass.
+
+## Fixes
+
+- **Cohere answered 405 on every request.** The registry pointed at
+  `https://api.cohere.ai/v1/chat/completions`, a path Cohere does not serve — it
+  405s with a valid key, an invalid key, and no key at all, so it was never an
+  auth or model problem. Because 405 reads as "wrong HTTP method" rather than
+  "endpoint gone", it looked like a client bug for as long as nobody compared the
+  URL to the docs. The provider now targets the Compatibility API
+  (`/compatibility/v1/chat/completions`), which is the OpenAI-shaped surface the
+  OpenAI SDK is pointed at, so `DefaultExecutor` needs no translator. `validateUrl`
+  deliberately stays on the native host, which still serves a model list. The
+  Command A family is now listed — `command-a-plus-05-2026`,
+  `command-a-reasoning-08-2025`, `command-a-vision-07-2025`,
+  `command-a-translate-08-2025` — alongside the existing Command R rows; all seven
+  verified reachable. Note that Cohere's Compatibility API does not support
+  `documents`/citations at all; those exist only on `/v2/chat`.
+- **Freebuff quota rows lost their price.** `parseQuotaData` carried **two**
+  `case "freebuff":` arms in one `switch`. A switch takes the first matching arm,
+  so the later arm — the one mapping `price`, `priceNote`, `recurring` and the
+  peak flags — was unreachable dead code and every metered row rendered with no
+  cost, which is the one column a Freebucks-metered account decides on. The
+  duplicate arrived 20 minutes apart on the same day (`9362b044` added a
+  label-only arm, `fab7753f` appended a superset instead of replacing it), and
+  duplicate switch arms are invisible to both grep-by-count and lint. The earlier
+  arm is removed; the later one is a strict superset. Verified against the
+  account's live session payload: 10/10 rows now carry a rate.
+- **Freebuff: the standing "computed balance" notice is gone.** UniKey's
+  explanatory text had been written into the `message` field of a successful
+  usage response, so it rendered as a permanent per-connection notice on every
+  refresh, on all nine connections, even though the numbers were correct. `message`
+  is now reserved for real failures (auth rejected, relay unreachable); the setup
+  guidance moved to the provider `notice`, where it shows once on the provider page.
+- **Smart skill routing never fired for Kiro.** `injectActiveSkills` runs *after*
+  translation, so a Kiro body is `conversationState`-shaped and has no `messages`
+  array — `userText()` therefore read zero messages and silently injected nothing.
+  `userText()` now also reads `conversationState.currentMessage` and `history`.
+  The added tests drive the real translator rather than a hand-made body, because
+  the body upstream's own test used is not one our translator produces.
+- **`x-skill` header was truncated to its first character.** A header value like
+  `watermarks-remover,commit-lint` arrived as `w`, so the per-request override
+  silently disabled the wrong set of skills.
+- **Streaming usage was lost when the client left at the terminal event.** A
+  stream that ended on the final chunk — or was aborted after it — recorded no
+  usage at all, so those requests were invisible in usage stats. Usage is now
+  finalized on the terminal event and again on `cancel()`, both idempotent.
+- **Duplicate `ollama-search` entry removed** from the registry list — it was
+  inserted twice (129 entries for 128 unique ids). Consumers key by id, so there
+  was no runtime impact; the ordered position is the one kept.
+
 # v0.1.10 (2026-09-12)
 
 ## Features
