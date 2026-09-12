@@ -53,6 +53,23 @@ function msgText(m) {
 
 // Lowercased concatenation of the last few user messages, used for smart routing.
 function userText(body) {
+  // Kiro has no messages array by the time we see it: chatCore injects AFTER
+  // translation, so the body is already in Kiro's conversationState shape with the
+  // user turns under history[].userInputMessage / currentMessage.userInputMessage.
+  // Without this branch the generic path below finds nothing for Kiro, so smart
+  // routing silently never matched and the skill was never injected.
+  const kiroState = body?.conversationState;
+  if (kiroState && typeof kiroState === "object") {
+    const kiroMsgs = [
+      ...(Array.isArray(kiroState.history) ? kiroState.history : []),
+      kiroState.currentMessage,
+    ]
+      .filter((item) => item?.userInputMessage)
+      .map((item) => item.userInputMessage)
+      .slice(-3);
+    return kiroMsgs.map(msgText).join(" ").toLowerCase();
+  }
+
   const msgs =
     Array.isArray(body?.messages) ? body.messages :
     Array.isArray(body?.contents) ? body.contents :

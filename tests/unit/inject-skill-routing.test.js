@@ -106,6 +106,67 @@ function userText(body) {
   return userMsgs.map(msgText).join(" ").toLowerCase();
 }
 
+describe("smart routing on Kiro bodies (real translator output)", () => {
+  // Ground truth: chatCore injects AFTER translation, so for Kiro the body is
+  // already conversationState-shaped and carries no `messages` array. Build the
+  // body with the real translator rather than hand-rolling one, so this test fails
+  // if either the translator's shape or the routing reader drifts apart.
+  it("reads the user turn out of conversationState.currentMessage", async () => {
+    const { openaiToKiroRequest } = await import("../../open-sse/translator/request/openai-to-kiro.js");
+    const body = openaiToKiroRequest(
+      "claude-sonnet-4.5",
+      { messages: [{ role: "user", content: "please remove the watermark from this image" }] },
+      false,
+      {},
+    );
+    expect(Array.isArray(body.messages)).toBe(false);
+    expect(body.conversationState?.currentMessage?.userInputMessage).toBeTruthy();
+
+    const injected = await mods.injectActiveSkills(body, "kiro", ["watermarks-remover"], {
+      "watermarks-remover": "smart",
+    });
+    expect(injected).toEqual(["watermarks-remover"]);
+    expect(JSON.stringify(body)).toContain("WATERMARK_PROMPT_X");
+  });
+
+  it("does not inject when the keyword is absent from a Kiro body", async () => {
+    const { openaiToKiroRequest } = await import("../../open-sse/translator/request/openai-to-kiro.js");
+    const body = openaiToKiroRequest(
+      "claude-sonnet-4.5",
+      { messages: [{ role: "user", content: "what is the capital of france?" }] },
+      false,
+      {},
+    );
+    const injected = await mods.injectActiveSkills(body, "kiro", ["watermarks-remover"], {
+      "watermarks-remover": "smart",
+    });
+    expect(injected).toEqual([]);
+    expect(JSON.stringify(body)).not.toContain("WATERMARK_PROMPT_X");
+  });
+
+  it("searches earlier Kiro turns held in history, not just the current one", async () => {
+    const { openaiToKiroRequest } = await import("../../open-sse/translator/request/openai-to-kiro.js");
+    const body = openaiToKiroRequest(
+      "claude-sonnet-4.5",
+      {
+        messages: [
+          { role: "user", content: "strip the c2pa metadata please" },
+          { role: "assistant", content: "sure" },
+          { role: "user", content: "thanks, carry on" },
+        ],
+      },
+      false,
+      {},
+    );
+    // The keyword lives in history, the latest turn only says "thanks".
+    expect(body.conversationState.history.length).toBeGreaterThan(0);
+    const injected = await mods.injectActiveSkills(body, "kiro", ["watermarks-remover"], {
+      "watermarks-remover": "smart",
+    });
+    expect(injected).toEqual(["watermarks-remover"]);
+  });
+});
+
 describe("injectSkillBlock gemini/antigravity shape (real module)", () => {
   it("antigravity: skill block lands in request.systemInstruction", async () => {
     const body = { request: { contents: [{ role: "user", parts: [{ text: "hi" }] }] } };
