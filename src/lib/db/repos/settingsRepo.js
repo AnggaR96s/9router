@@ -50,6 +50,8 @@ const DEFAULT_SETTINGS = {
   mitmRouterBaseUrl: DEFAULT_MITM_ROUTER_BASE,
   dnsToolEnabled: {},
   rtkEnabled: true,
+  activeSkills: [],
+  skillRoutingModes: {},
   headroomEnabled: false,
   headroomUrl: DEFAULT_HEADROOM_URL,
   headroomCompressUserMessages: false,

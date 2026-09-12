@@ -13,6 +13,7 @@ import { isDashboardSession } from "@/lib/auth/dashboardSession";
 import { getClientIp } from "@/lib/auth/loginLimiter";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
+import { resolveActiveSkillIds } from "open-sse/rtk/injectSkill.js";
 import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
 import { getTransform as getPxpipeTransform } from "@/lib/pxpipe/loader.js";
 import { appendPxpipeEvent } from "@/lib/pxpipe/events.js";
@@ -329,6 +330,11 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       headroomTimeoutMs: chatSettings.headroomTimeoutMs,
       cavemanEnabled: !!chatSettings.cavemanEnabled,
       cavemanLevel: chatSettings.cavemanLevel || "full",
+      activeSkillIds: resolveActiveSkillIds(
+        chatSettings.activeSkills,
+        clientRawRequest?.headers?.["x-skill"]?.[0] ?? clientRawRequest?.headers?.["x-skill"]
+      ),
+      skillRoutingModes: chatSettings.skillRoutingModes || {},
       ponytailEnabled: !!chatSettings.ponytailEnabled,
       ponytailLevel: chatSettings.ponytailLevel || "full",
       pxpipeEnabled: !!chatSettings.pxpipeEnabled,

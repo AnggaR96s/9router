@@ -22,6 +22,7 @@ import { detectClientTool, isNativePassthrough } from "../utils/clientDetector.j
 import { dedupeTools } from "../utils/toolDeduper.js";
 import { injectCaveman } from "../rtk/caveman.js";
 import { injectPonytail } from "../rtk/ponytail.js";
+import { injectActiveSkills } from "../rtk/injectSkill.js";
 import { pruneContextMessages } from "../rtk/contextPruning.js";
 import { checkSemanticCache, saveToSemanticCache } from "../rtk/semanticCache.js";
 import { compressMessages, formatRtkLog } from "../rtk/index.js";
@@ -60,7 +61,7 @@ export function stripContinuityFields(body) {
   return body;
 }
 
-export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, contextPruningEnabled, maxMessagesLimit, semanticCacheEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking }) {
+export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, contextPruningEnabled, maxMessagesLimit, semanticCacheEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, activeSkillIds, skillRoutingModes, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking }) {
   const { provider, model } = modelInfo;
   const requestStartTime = Date.now();
   // Stable per-session color so all lines of one CLI conversation share a tag
@@ -307,6 +308,10 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     injectPonytail(translatedBody, finalFormat, ponytailLevel);
     xf.push(`PONYTAIL:${ponytailLevel}`);
   }
+
+  // Add-on skills: inject active system-prompt skills (dashboard toggles / x-skill header)
+  const injectedSkills = await injectActiveSkills(translatedBody, finalFormat, activeSkillIds, skillRoutingModes);
+  for (const sid of injectedSkills) xf.push("SKILL:" + sid);
 
   // PXPIPE: image bulky context (Claude-format bodies only), last saver before dispatch
   let pxpipeSummary = null;

@@ -321,6 +321,18 @@ function buildCliPackage() {
     console.log("⏭️  No updater files found\n");
   }
 
+  // Step 7c: Copy skills/ (add-on skill manifests + prompts, read at request
+  // time by src/lib/skillsRegistry.js — never webpacked)
+  console.log("7c Copying skills folder...");
+  const skillsSrc = path.join(appDir, "skills");
+  const skillsDest = path.join(cliAppDir, "skills");
+  if (fs.existsSync(skillsSrc)) {
+    copyRecursive(skillsSrc, skillsDest);
+    console.log("Copied skills folder\n");
+  } else {
+    console.log("No skills folder found\n");
+  }
+
   // Step 8: Build MITM server (config driven - see app/cli/scripts/buildMitm.js)
   console.log("8️⃣  Building MITM server...");
   try {
@@ -330,6 +342,10 @@ function buildCliPackage() {
     console.error("❌ MITM build failed");
     process.exit(1);
   }
+
+  // Remove build-time HOME artifacts (jwt-secret, machine-id, sqlite db) so
+  // they never ship inside the npm package
+  fs.rmSync(path.join(cliAppDir, "cli", ".build-home"), { recursive: true, force: true });
 
   console.log("✨ CLI package build completed!");
   console.log(`📁 Output: ${cliAppDir}`);
