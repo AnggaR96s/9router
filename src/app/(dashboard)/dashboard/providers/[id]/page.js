@@ -1742,7 +1742,12 @@ export default function ProviderDetailPage() {
                           onBlur={(e) => handlePacingGapChange(e.target.value, { commit: true })}
                           placeholder="20"
                           aria-label="Pacing gap in seconds"
-                          className="w-16 rounded-md border border-border bg-background px-2 py-1 text-right text-xs tabular-nums focus:border-primary focus:outline-none"
+                          // w-20, not w-16: measured in a real browser, w-16 clips
+                          // its own text at 5 digits (scrollWidth 69 > clientWidth
+                          // 62), so a value like 99999 would render cut off. w-20
+                          // fits every realistic value up to 6 digits with room
+                          // for the stepper.
+                          className="w-20 shrink-0 rounded-md border border-border bg-background px-2 py-1 text-right text-xs tabular-nums focus:border-primary focus:outline-none"
                         />
                         <span className="text-xs text-text-muted">sec</span>
                       </div>
