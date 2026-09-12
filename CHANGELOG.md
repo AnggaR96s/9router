@@ -1,3 +1,120 @@
+# v0.1.10 (2026-09-12)
+
+## Features
+
+- **Add-on Skills — a new `/dashboard/addons` menu** that injects behavior rules
+  into the system prompt of every routed request, without touching the client's
+  own prompt. Three skills ship: `human-handwritten` (anti-AI-slop copywriting,
+  from `miqdadbadjuber/anti-slop`), `watermarks-remover` (invisible-Unicode and
+  C2PA/EXIF stripping, from `guillaumemeier/watermarks-remover`), and
+  `commit-lint` (Conventional Commits enforcement, built in). (PR #3 by
+  [@bagus02](https://github.com/bagus02).)
+- **Per-skill routing mode: off / smart / always** — `always` injects on every
+  request, `smart` injects only when one of the skill's keywords appears in the
+  recent user turns (word-boundary matched, so `copy` does not fire inside
+  `copyright`), `off` never injects.
+- **`x-skill` request header** — per-request override of the dashboard setting:
+  `off` disables all skills, `on` uses the saved list, or pass a comma-separated
+  list of skill ids.
+- **Secure skill prompt updater** — pulls a prompt from a whitelisted source
+  repo, compares SHA-256 against the local file, writes a `.bak` before
+  overwriting, and skips anything edited locally. Source repo/branch/path are
+  read from the local manifest only, never from the request; both the POST and
+  GET paths run the same validation; `prompt_file` is basename-validated;
+  64 KB cap, UTF-8 check, 15 s timeout, 5 min cache, per-skill update lock and
+  atomic tmp+rename writes.
+- **Freebuff: request pacing is now provider config** (`pacing.gapSeconds`),
+  overlappable from the dashboard. A new **Pacing Gap** field on the freebuff
+  provider page sets the minimum idle gap between two requests on one account,
+  in seconds; empty falls back to the default (20 s). Resolution order is
+  dashboard setting → `FREEBUFF_PACING_GAP_MS` → provider config → built-in
+  default, and both the executor gate and the keeper read the same value. Applies
+  on save, with no restart.
+- **Freebuff: Muse Spark 1.3 is the standing model row.** 1.2 was retired from
+  upstream's pickers on 2026-09-02; we had kept it after a probe saw 1.3 return
+  404, which turned out to be a stale key rather than a withdrawal — upstream
+  serves both ids from one shared pool at the same 15 Freebucks/hr. 1.3 now
+  carries its own root agent and capability entry, and 1.2 stays selectable with
+  a `supersededBy` pointer so sessions already admitted on it still run.
+
+## Fixes
+
+- **Backup silently dropped 8 `apiKeys` columns.** `exportDb` hand-picked 6 of
+  the table's 14 columns, so `tokenLimit`, `usedTokens`, `resetInterval`,
+  `lastResetAt`, `allowedModels`, `rpmLimit`, `tpmLimit` and `ipWhitelist` never
+  reached a backup, and `importDb` wrote back the same 6. Nothing errored: an
+  export→import cycle zeroed a key's token usage and erased its rate caps, model
+  allowlist and IP whitelist, and you would only notice when a limit stopped
+  being enforced. One canonical column list now drives the export shape AND both
+  the INSERT and UPDATE SQL, so the column list and its placeholders cannot
+  drift apart. Old backups that carry only the 6 legacy fields still import,
+  landing on `createApiKey`'s defaults.
+- **Freebuff: session claims realigned with the 2026-09 upstream API.** Claiming
+  moved to `POST /session/admission` (legacy `POST /session` kept as a fallback
+  — cached when admission returns 405, retried once without caching on 404, which
+  is ambiguous with "no row yet"), plus a 45 s liveness heartbeat so the server
+  keeps our concurrency slot, the four new gate statuses `consent_required` /
+  `purchase_claim_released` / `purchase_in_use` / `purchase_capacity`, the
+  `x-freebuff-wallet-spend-limit: 0` claim header, and reporting of the
+  account-level `freeWindows` day/week/month allowance.
+- **Relay labels now name the real relay kind.** All three relay pool types
+  (vercel, cloudflare, deno) ride one shared transport field, so logging that
+  field's name reported a Cloudflare Worker as `vercel-relay=`. Logs now print
+  the pool's actual type, which matters because the wrong label sent readers
+  hunting a mis-typed pool that was in fact correct.
+- **Long proxy URLs no longer push the endpoint row out of shape.** The URL field
+  could not shrink — flex items default to `min-width: auto` — so at 320 px a long
+  Vercel relay URL pushed the copy button past the row and made the page scroll
+  sideways. `min-w-0` plus `truncate` lets the field shrink and ellipsize.
+- **The pacing input clipped its own value.** Measured in a browser: the field's
+  content box was 62 px while a 5-digit value needs 69 px, so anything from 99999
+  up rendered cut off with no scrollbar or warning. Widened to the narrowest
+  width that fits every realistic value.
+- **Add-on skill row collapsed on phones.** At 320 px the fixed-width control
+  cluster left the text column 23.9 px wide — about one character — and the
+  description spilled out of its box. The row now stacks below `sm` (icon and text
+  full width, controls on their own line) and is unchanged from `sm` up, so
+  desktop is pixel-identical: the text column goes from 23.9 px to 198 px at
+  320 px, and stays 599.9 px at 1024 px and above.
+- **Groq and Ollama usage reporting.** Groq exposes its rate limits only on a
+  chat completion response, not on `/models`, so quota showed as unknown; a
+  minimal probe with a TTL cache now reads them. Ollama's monthly bucket is read
+  from `limits.monthly.usage` with `session`/`weekly` fallbacks.
+- **models.dev limits reach CodeBuddy** — `codebuddy-intl` maps to the canonical
+  `openai` entry so context limits come from models.dev when the gateway has no
+  row of its own, with the local 400 K fallback only as a failsafe.
+- **9Remote and 9English removed from the sidebar.** Both were upstream promo
+  links to unrelated products, neither routing anywhere in this gateway. The
+  promo modal, its button component, the unused re-export and 43 translation
+  literals went with them; i18n keys that merely contain the word "remote"
+  (Tailscale tunnel warnings) are untouched.
+
+## Performance
+
+- **Applying a proxy pool to many connections is one request instead of N.**
+  The dashboard looped one `PUT /api/providers/[id]` per connection, sequentially:
+  500 accounts meant 500 round trips and 500 transactions, tens of seconds of a
+  frozen "Applying..." state, and a failure part-way left the batch half-applied
+  with no way to tell which half. A new `POST /api/providers/bulk-proxy` does the
+  whole batch in ONE transaction — measured on 500 seeded connections, the write
+  path went from 95 ms to 9 ms (10.6×) and from 500 HTTP round trips to 1.
+  Connections that already hold the requested pool are skipped and reported as
+  `unchanged`; ids that no longer exist come back in `missing`; the pool is
+  validated up front so a bogus id refuses the batch instead of half-writing it.
+  The old per-row path is kept as a fallback for older bundles.
+
+## Internal
+
+- Add-on skills are shipped in the CLI package (`skills/`), and build-home
+  artifacts (jwt-secret, machine-id, sqlite db) are stripped from the published
+  tarball.
+- Test coverage added for the bulk proxy planner and transaction, the apiKeys
+  backup round-trip (verified red-then-green: 3 of 5 cases fail on the previous
+  code), settings round-trip including the pacing gap, the models.dev alias
+  fallback, and the freebuff pacing resolution order.
+- The `verify-no-regression.mjs` gate compares test names against a snapshot
+  whose paths are baked in; on this checkout it produces `undefined` names, so
+  regressions were checked by comparing full unit runs test-by-test instead.
 # v0.1.9 (2026-09-11)
 
 ## Features
