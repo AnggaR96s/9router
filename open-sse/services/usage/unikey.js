@@ -202,24 +202,19 @@ export async function getUnikeyUsage(apiKey = null, providerSpecificData = null,
     const totalCredits = parseConfiguredTotalCredits(providerSpecificData);
     const planLabel = sub?.hasPaymentMethod ? `${PROVIDER_LABEL} (paid)` : PROVIDER_LABEL;
     const quotas = {};
-    let message;
 
     if (usage) {
       const spent = usage.spentCredits;
 
       // Arithmetic first — no extra request needed.
       let remaining = Math.max(0, totalCredits - spent);
-      let balanceSource = "computed";
 
       // Only reconcile against the relay when the connection asks for it: the probe
       // is free of charge but still a round trip, and the arithmetic agrees with the
       // provider to the cent when the configured grant is current.
       if (shouldProbeBalance(providerSpecificData)) {
         const probed = await probeRemainingCredits(key, proxyOptions);
-        if (probed !== null) {
-          remaining = probed;
-          balanceSource = "probed";
-        }
+        if (probed !== null) remaining = probed;
       }
 
       quotas.Credits = {
@@ -230,16 +225,14 @@ export async function getUnikeyUsage(apiKey = null, providerSpecificData = null,
         resetAt: null,
         unlimited: false,
       };
-
-      if (balanceSource === "computed") {
-        message =
-          `${PROVIDER_LABEL} balance is computed as ${totalCredits} grant - ${spent.toFixed(2)} spent. ` +
-          `Set "${TOTAL_CREDITS_FIELD}" on this connection if your grant differs, or ` +
-          `"${PROBE_BALANCE_FIELD}": true to read the exact figure from the relay instead.`;
-      }
     }
 
-    return { plan: planLabel, quotas, ...(message ? { message } : {}) };
+    // Deliberately no explanatory message here. An earlier revision appended one on
+    // every computed response, which rendered under every connection as a standing
+    // warning — it read like a fault even when the numbers were correct, and it is
+    // shown on each refresh. The two optional fields are documented in the handler
+    // header and named in the registry's provider notice instead, where they belong.
+    return { plan: planLabel, quotas };
   } catch (error) {
     return { message: `${PROVIDER_LABEL} error: ${error.message}` };
   }

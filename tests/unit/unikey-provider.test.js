@@ -142,6 +142,26 @@ describe("UniKey usage handler", () => {
     vi.unstubAllGlobals();
   });
 
+  it("returns no explanatory message on a normal computed response", async () => {
+    // An earlier revision appended a "set unikeyTotalCredits / unikeyProbeBalance"
+    // note to every computed response. The dashboard renders `message` as a standing
+    // notice under the connection, so it appeared on every refresh reading like a
+    // fault even when the numbers were right. Keep normal responses message-free.
+    vi.stubGlobal("fetch", vi.fn(async (url) => {
+      if (String(url).endsWith("/usage")) {
+        return { ok: true, status: 200, json: async () => ({ object: "list", total_usage: 0.368 }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ object: "billing_subscription", has_payment_method: true }) };
+    }));
+    vi.resetModules();
+    const { getUnikeyUsage } = await import("../../open-sse/services/usage/unikey.js");
+    const out = await getUnikeyUsage("sk-test");
+
+    expect(out.message).toBeUndefined();
+    expect(out.quotas.Credits.remaining).toBeCloseTo(4963.2, 2);
+    vi.unstubAllGlobals();
+  });
+
   it("honours a configured grant override", async () => {
     vi.stubGlobal("fetch", vi.fn(async (url) => {
       if (String(url).endsWith("/usage")) {

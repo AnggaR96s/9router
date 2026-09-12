@@ -10,6 +10,7 @@ export default {
     website: "https://www.getunikey.ai",
     notice: {
       apiKeyUrl: "https://www.getunikey.ai/console/token",
+      text: "Bills in credits (1 credit = $0.01). Remaining is computed as a 5000-credit grant minus spend; set providerSpecificData.unikeyTotalCredits to your real grant if it differs, or unikeyProbeBalance: true to read the exact balance from the relay.",
     },
   },
   category: "apikey",
