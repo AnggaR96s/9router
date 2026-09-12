@@ -3,11 +3,22 @@
 import { getInstalledSkills } from "@/lib/skillsRegistry.js";
 import { injectSystemPrompt } from "./systemInject.js";
 
+// Read one header value that may arrive either as a string (from
+// Object.fromEntries(request.headers.entries())) or as an array (Node's raw
+// IncomingMessage / undici Headers.getSetCookie style callers).
+// Indexing a STRING would return its first character — "on" -> "o" — which is
+// how the x-skill header silently became a no-op. Never index blind.
+export function readHeaderValue(headers, name) {
+  const raw = headers?.[name] ?? headers?.[name?.toLowerCase?.()];
+  if (raw == null) return undefined;
+  return Array.isArray(raw) ? raw[0] : String(raw);
+}
+
+// Header overrides the dashboard setting per-request:
+// - "off": disable all skills
+// - "on":  fall back to dashboard activeSkills
+// - "<csv>": explicit list of skill ids (case-insensitive)
 export function resolveActiveSkillIds(dbActiveSkills, headerValue) {
-  // Header overrides the dashboard setting per-request:
-  // - "off": disable all skills
-  // - "on":  fall back to dashboard activeSkills
-  // - "<csv>": explicit list of skill ids (case-insensitive)
   if (!headerValue) {
     return Array.isArray(dbActiveSkills) ? dbActiveSkills : [];
   }
