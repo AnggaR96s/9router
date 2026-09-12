@@ -33,6 +33,82 @@ export async function getApiKeyById(id) {
   return rowToKey(row);
 }
 
+/**
+ * Canonical apiKeys column list, in table order — the single source that
+ * builds both the INSERT column list AND its placeholder list.
+ *
+ * It exists because the two drifted: `exportDb` hand-picked 6 of the 14
+ * columns, so a backup silently dropped tokenLimit / usedTokens /
+ * resetInterval / lastResetAt / allowedModels / rpmLimit / tpmLimit /
+ * ipWhitelist — every one of which the limiter reads. An export→import cycle
+ * therefore reset a key's usage and erased its rate limits without any error.
+ * Deriving the SQL from one array makes a column/placeholder mismatch
+ * impossible to write rather than merely unlikely.
+ *
+ * Any column added to the apiKeys schema belongs here, and nowhere else.
+ */
+export const API_KEY_COLUMNS = Object.freeze([
+  "id", "key", "name", "machineId", "isActive", "createdAt",
+  "tokenLimit", "usedTokens", "resetInterval", "lastResetAt",
+  "allowedModels", "rpmLimit", "tpmLimit", "ipWhitelist",
+]);
+
+/**
+ * Full row → exportable object with EVERY column preserved.
+ *
+ * `isActive` is normalized to a boolean (matching the other exporters) and the
+ * rest are passed through untouched, so a backup round-trips a key's limits
+ * exactly. Deliberately has no field picking: a future column that gets added
+ * to API_KEY_COLUMNS but forgotten here would be caught by the round-trip test,
+ * whereas silent omission is what caused the original bug.
+ */
+export function apiKeyRowToExport(row) {
+  if (!row) return null;
+  const out = {};
+  for (const col of API_KEY_COLUMNS) {
+    out[col] = col === "isActive"
+      ? (row.isActive === 1 || row.isActive === true)
+      : row[col];
+  }
+  return out;
+}
+
+/**
+ * Normalize one imported apiKey into column order, filling the same defaults
+ * `createApiKey` uses so an imported key behaves identically to a created one.
+ */
+export function normalizeApiKeyForImport(source = {}) {
+  const now = new Date().toISOString();
+  return {
+    id: source.id,
+    key: source.key,
+    name: source.name ?? null,
+    machineId: source.machineId ?? null,
+    isActive: source.isActive === false ? 0 : 1,
+    createdAt: source.createdAt || now,
+    tokenLimit: Number(source.tokenLimit) || 0,
+    usedTokens: Number(source.usedTokens) || 0,
+    resetInterval: source.resetInterval || "never",
+    lastResetAt: source.lastResetAt || null,
+    allowedModels: source.allowedModels || "*",
+    rpmLimit: Number(source.rpmLimit) || 0,
+    tpmLimit: Number(source.tpmLimit) || 0,
+    ipWhitelist: typeof source.ipWhitelist === "string" ? source.ipWhitelist : "",
+  };
+}
+
+/** INSERT built from API_KEY_COLUMNS — column list and placeholders cannot drift. */
+export function buildApiKeyInsertSql() {
+  const cols = API_KEY_COLUMNS.join(", ");
+  const marks = API_KEY_COLUMNS.map(() => "?").join(", ");
+  return `INSERT OR REPLACE INTO apiKeys(${cols}) VALUES(${marks})`;
+}
+
+/** Parameter list in the SAME order as the SQL above. */
+export function apiKeyInsertValues(normalized) {
+  return API_KEY_COLUMNS.map((col) => normalized[col]);
+}
+
 export async function createApiKey(name, machineId, options = {}) {
   if (!machineId) throw new Error("machineId is required");
   const db = await getAdapter();
@@ -56,25 +132,24 @@ export async function createApiKey(name, machineId, options = {}) {
     ipWhitelist: options.ipWhitelist || "",
   };
   db.run(
-    `INSERT INTO apiKeys(id, key, name, machineId, isActive, createdAt, tokenLimit, usedTokens, resetInterval, lastResetAt, allowedModels, rpmLimit, tpmLimit, ipWhitelist) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      apiKey.id,
-      apiKey.key,
-      apiKey.name,
-      apiKey.machineId,
-      1,
-      apiKey.createdAt,
-      apiKey.tokenLimit,
-      apiKey.usedTokens,
-      apiKey.resetInterval,
-      apiKey.lastResetAt,
-      apiKey.allowedModels,
-      apiKey.rpmLimit,
-      apiKey.tpmLimit,
-      apiKey.ipWhitelist,
-    ]
+    buildApiKeyInsertSql(),
+    apiKeyInsertValues(normalizeApiKeyForImport(apiKey)),
   );
   return apiKey;
+}
+
+/** UPDATE built from API_KEY_COLUMNS (id is the WHERE key, not a SET column). */
+export function buildApiKeyUpdateSql() {
+  const sets = API_KEY_COLUMNS.filter((c) => c !== "id").map((c) => `${c} = ?`).join(", ");
+  return `UPDATE apiKeys SET ${sets} WHERE id = ?`;
+}
+
+/** Parameter list matching buildApiKeyUpdateSql(), id last for the WHERE. */
+export function apiKeyUpdateValues(normalized) {
+  return [
+    ...API_KEY_COLUMNS.filter((c) => c !== "id").map((col) => normalized[col]),
+    normalized.id,
+  ];
 }
 
 export async function updateApiKey(id, data) {
@@ -85,22 +160,8 @@ export async function updateApiKey(id, data) {
     if (!row) return;
     const merged = { ...rowToKey(row), ...data };
     db.run(
-      `UPDATE apiKeys SET key = ?, name = ?, machineId = ?, isActive = ?, tokenLimit = ?, usedTokens = ?, resetInterval = ?, lastResetAt = ?, allowedModels = ?, rpmLimit = ?, tpmLimit = ?, ipWhitelist = ? WHERE id = ?`,
-      [
-        merged.key,
-        merged.name,
-        merged.machineId,
-        merged.isActive ? 1 : 0,
-        Number(merged.tokenLimit) || 0,
-        Number(merged.usedTokens) || 0,
-        merged.resetInterval || "never",
-        merged.lastResetAt || null,
-        merged.allowedModels || "*",
-        Number(merged.rpmLimit) || 0,
-        Number(merged.tpmLimit) || 0,
-        merged.ipWhitelist || "",
-        id,
-      ]
+      buildApiKeyUpdateSql(),
+      apiKeyUpdateValues(normalizeApiKeyForImport({ ...merged, id })),
     );
     result = merged;
   });
