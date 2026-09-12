@@ -213,7 +213,7 @@
     "tokenUrl": "https://auth.openai.com/oauth/token"
   },
   "cohere": {
-    "baseUrl": "https://api.cohere.ai/v1/chat/completions",
+    "baseUrl": "https://api.cohere.ai/compatibility/v1/chat/completions",
     "validateUrl": "https://api.cohere.ai/v1/models",
     "format": "openai"
   },
