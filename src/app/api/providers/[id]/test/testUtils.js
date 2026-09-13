@@ -91,7 +91,55 @@ const OAUTH_TEST_CONFIG = {
     authHeader: "Authorization",
     authPrefix: "Bearer ",
   },
-  "codebuddy-cn": { tokenExists: true },
+  // CodeBuddy (CN and intl) both expose the billing meter the usage handler
+  // already calls, and it is a real credential check: a valid token answers 200
+  // with the account payload, while an empty, malformed or truncated token
+  // answers 401. That makes it strictly better than the `tokenExists` stub these
+  // used to carry, which reported "valid" for any non-empty string and so could
+  // not notice an expired or revoked login.
+  //
+  // POST with an empty JSON body is correct for this endpoint; GET returns 404.
+  // Only the Authorization header is required — no User-Agent or X-Product
+  // gating — but the CLI's headers are sent so the probe looks like the traffic
+  // the provider expects rather than a bare request.
+  //
+  // Both are refreshable: refreshOAuthToken handles codebuddy-cn and
+  // codebuddy-intl, and each uses its own X-Domain (copilot.tencent.com vs
+  // www.codebuddy.ai), so a 401 here can be retried against a fresh token.
+  "codebuddy-cn": {
+    url: "https://copilot.tencent.com/v2/billing/meter/get-user-resource",
+    method: "POST",
+    authHeader: "Authorization",
+    authPrefix: "Bearer ",
+    extraHeaders: {
+      "Content-Type": "application/json",
+      "User-Agent": "CLI/2.108.1 CodeBuddy/2.108.1",
+      "X-Product": "SaaS",
+      "X-IDE-Type": "CLI",
+      "X-IDE-Name": "CLI",
+      "x-requested-with": "XMLHttpRequest",
+      "x-codebuddy-request": "1",
+    },
+    body: "{}",
+    refreshable: true,
+  },
+  "codebuddy-intl": {
+    url: "https://www.codebuddy.ai/v2/billing/meter/get-user-resource",
+    method: "POST",
+    authHeader: "Authorization",
+    authPrefix: "Bearer ",
+    extraHeaders: {
+      "Content-Type": "application/json",
+      "User-Agent": "CLI/2.108.1 CodeBuddy/2.108.1",
+      "X-Product": "SaaS",
+      "X-IDE-Type": "CLI",
+      "X-IDE-Name": "CLI",
+      "x-requested-with": "XMLHttpRequest",
+      "x-codebuddy-request": "1",
+    },
+    body: "{}",
+    refreshable: true,
+  },
   kimchi: {
     url: KIMCHI_CONFIG.validationUrl || "https://api.cast.ai/v1/llm/openai/supported-providers",
     method: "GET",
