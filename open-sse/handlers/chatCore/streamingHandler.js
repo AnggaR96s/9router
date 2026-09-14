@@ -8,6 +8,7 @@ import { buildAbortedResponsesTerminalBytes } from "../../utils/responsesStreamH
 import { buildRequestDetail, extractRequestConfig, saveUsageStats, formatDoneLine } from "./requestDetail.js";
 import { saveRequestDetail } from "@/lib/usageDb.js";
 import { SSE_HEADERS_CORS as SSE_HEADERS } from "../../utils/sseConstants.js";
+import { unwrapClineEnvelope } from "../../shared/clineEnvelope.js";
 
 // Codex returns Responses API SSE → which client format to translate INTO, by request sourceFormat.
 // Gemini-family all map to ANTIGRAVITY decoder; unknown sources fall back to OPENAI.
@@ -77,6 +78,59 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       }),
     };
+  }
+
+  // A provider can answer a streaming request with a buffered JSON body instead of SSE.
+  // Cline does exactly this: it emits a clean SSE stream only when the upstream body
+  // carries `stream: true`, and otherwise replies with a single JSON document — even
+  // though the client asked for SSE and `content-type` says application/json. That
+  // content-type is why the guard above lets it through, and piping a JSON document into
+  // the SSE transform emits it verbatim: the client receives `{"data":{"choices":...}}`
+  // with no `data:` framing, so every OpenAI-compatible client fails to parse it.
+  //
+  // Rewrap such a body as a single SSE chunk (+ [DONE]) so the stream stays a stream.
+  // Only bodies the provider's own unwrapper recognises are touched, so a genuine
+  // application/json response from anyone else is untouched.
+  const upstreamIsJson = upstreamContentType.includes('application/json')
+    && !upstreamContentType.includes('text/event-stream');
+  if (upstreamIsJson) {
+    // Must not read the response we might still pipe: `text()` locks the ReadableStream, and
+    // the `pipeThrough` below then throws "The ReadableStream is locked". Clone first — the
+    // original stays untouched for the SSE path, and only the clone is consumed here.
+    const probe = providerResponse.clone();
+    const raw = await probe.text().catch(() => '');
+    let parsed = null;
+    try { parsed = JSON.parse(raw); } catch { parsed = null; }
+    const inner = parsed ? unwrapClineEnvelope(parsed, provider) : null;
+    // `inner !== parsed` means the unwrapper actually recognised and unwrapped it.
+    if (inner && inner !== parsed) {
+      const chunk = {
+        id: inner.id || `chatcmpl-${Date.now()}`,
+        object: 'chat.completion.chunk',
+        created: inner.created || Math.floor(Date.now() / 1000),
+        model: inner.model || model,
+        choices: (inner.choices || []).map((c, i) => ({
+          index: c.index ?? i,
+          delta: { ...(c.message || {}), role: (c.message || {}).role || 'assistant' },
+          finish_reason: c.finish_reason ?? 'stop',
+        })),
+      };
+      const payload = `data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`;
+      saveRequestDetail(buildRequestDetail({
+        provider, model, connectionId,
+        latency: { ttft: 0, total: Date.now() - requestStartTime },
+        tokens: inner.usage || { prompt_tokens: 0, completion_tokens: 0 },
+        request: extractRequestConfig(body, stream),
+        providerRequest: finalBody || translatedBody || null,
+        providerResponse: inner.choices?.[0]?.message?.content || '',
+        response: { content: inner.choices?.[0]?.message?.content || '', thinking: null, type: 'streaming' },
+        pxpipe, status: 'success',
+      }, { id: streamDetailId })).catch(() => {});
+      return {
+        success: true,
+        response: new Response(payload, { headers: SSE_HEADERS }),
+      };
+    }
   }
 
   const transformStream = buildTransformStream({ provider, sourceFormat, targetFormat, userAgent, reqLogger, toolNameMap, customToolNames, model, connectionId, body, onStreamComplete, apiKey, credentials });
