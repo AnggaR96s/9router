@@ -5,8 +5,10 @@ import Card from "@/shared/components/Card";
 import Button from "@/shared/components/Button";
 import Drawer from "@/shared/components/Drawer";
 import Pagination from "@/shared/components/Pagination";
+import { ConfirmModal } from "@/shared/components/Modal";
 import { cn } from "@/shared/utils/cn";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
+import { useNotificationStore } from "@/store/notificationStore";
 
 function formatError(text) {
   if (!text) return null;
@@ -81,9 +83,16 @@ export default function ErrorLogClient() {
 
   const [clearing, setClearing] = useState(false);
   const [lastCleared, setLastCleared] = useState(null);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const notify = useNotificationStore();
 
+  // Split in two: the button opens the dialog, and only the dialog's confirm
+  // performs the delete. Clearing error logs is irreversible from the UI and can
+  // wipe evidence of an incident that is still being diagnosed, so a stray click
+  // must not be able to do it — which is what the previous window.confirm() was
+  // there for, except that a native dialog sits outside the app's styling and
+  // cannot show progress while the request is in flight.
   const handleClearLogs = async () => {
-    if (!window.confirm("Clear ALL error logs? This cannot be undone.")) return;
     setClearing(true);
     try {
       const res = await fetch("/api/usage/error-logs", { method: "DELETE" });
@@ -94,12 +103,16 @@ export default function ErrorLogClient() {
       setSelectedLog(null);
       setIsDrawerOpen(false);
       setLastCleared(data.deleted);
+      setConfirmClearOpen(false);
+      notify.success(data.deleted > 0 ? `Cleared ${data.deleted} error logs` : "No error logs to clear");
       // Refresh filters-dependent counts (e.g. provider list) — fetchLogs will
       // run on next pagination/filter change; also refetch once to settle state.
       fetchLogs();
     } catch (error) {
       console.error("Failed to clear error logs:", error);
-      window.alert(error.message || "Failed to clear error logs");
+      // Keep the dialog open on failure so the action can be retried without
+      // reopening it; the message explains why nothing was removed.
+      notify.error(error.message || "Failed to clear error logs");
     } finally {
       setClearing(false);
     }
@@ -216,7 +229,7 @@ export default function ErrorLogClient() {
               variant="outline"
               size="sm"
               icon="delete_sweep"
-              onClick={handleClearLogs}
+              onClick={() => setConfirmClearOpen(true)}
               disabled={clearing || pagination.totalItems === 0}
               className="border-red-500/30 text-red-500 hover:bg-red-500/10 hover:text-red-600 whitespace-nowrap"
             >
@@ -427,6 +440,18 @@ export default function ErrorLogClient() {
           </div>
         )}
       </Drawer>
+
+      <ConfirmModal
+        isOpen={confirmClearOpen}
+        onClose={() => !clearing && setConfirmClearOpen(false)}
+        onConfirm={handleClearLogs}
+        title="Clear all error logs"
+        message={`This permanently deletes all ${pagination.totalItems} error log${pagination.totalItems === 1 ? "" : "s"} and cannot be undone. Request details and usage history are not affected.`}
+        confirmText="Clear all logs"
+        cancelText="Cancel"
+        variant="danger"
+        loading={clearing}
+      />
     </div>
   );
 }
