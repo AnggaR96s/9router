@@ -33,9 +33,26 @@ export default {
     { id: "perplexity/pplx-embed-v1-4b", name: "Perplexity Embed V1 4B", kind: "embedding" },
     { id: "perplexity/pplx-embed-v1-0.6b", name: "Perplexity Embed V1 0.6B", kind: "embedding" },
     { id: "nvidia/llama-nemotron-embed-vl-1b-v2:free", name: "NVIDIA Nemotron Embed VL 1B V2 (Free)", kind: "embedding" },
-    { id: "openai/gpt-4o-mini-tts", name: "GPT-4o Mini TTS", kind: "tts" },
-    { id: "openai/tts-1-hd", name: "TTS-1 HD", kind: "tts" },
-    { id: "openai/tts-1", name: "TTS-1", kind: "tts" },
+    // The openai/tts-* ids are gone from OpenRouter (400 "does not exist"). These are the
+    // speech models it lists today; the two :free ones lead so the default is free.
+    { id: "deepgram/flux-tts:free", name: "Deepgram Flux TTS (Free)", kind: "tts" },
+    { id: "fish-audio/s2.1-pro-free:free", name: "Fish Audio S2.1 Pro (Free)", kind: "tts" },
+    { id: "deepgram/aura-2", name: "Deepgram Aura-2", kind: "tts" },
+    { id: "fish-audio/s2.1-pro", name: "Fish Audio S2.1 Pro", kind: "tts" },
+    { id: "fish-audio/s2-pro", name: "Fish Audio S2 Pro", kind: "tts" },
+    { id: "fish-audio/s1", name: "Fish Audio S1", kind: "tts" },
+    { id: "google/gemini-3.1-flash-tts-preview", name: "Gemini 3.1 Flash TTS", kind: "tts" },
+    { id: "minimax/speech-2.8-turbo", name: "MiniMax Speech 2.8 Turbo", kind: "tts" },
+    { id: "minimax/speech-2.8-hd", name: "MiniMax Speech 2.8 HD", kind: "tts" },
+    { id: "x-ai/grok-voice-tts-1.0", name: "Grok Voice TTS 1.0", kind: "tts" },
+    { id: "qwen/qwen-audio-3.0-tts-flash", name: "Qwen Audio 3.0 TTS Flash", kind: "tts" },
+    { id: "qwen/qwen-audio-3.0-tts-plus", name: "Qwen Audio 3.0 TTS Plus", kind: "tts" },
+    { id: "mistralai/voxtral-mini-tts-2603", name: "Voxtral Mini TTS", kind: "tts" },
+    { id: "sesame/csm-1b", name: "Sesame CSM 1B", kind: "tts" },
+    { id: "hexgrad/kokoro-82m", name: "Kokoro 82M", kind: "tts" },
+    { id: "canopylabs/orpheus-3b-0.1-ft", name: "Orpheus 3B", kind: "tts" },
+    { id: "microsoft/mai-voice-2", name: "MAI Voice 2", kind: "tts" },
+    { id: "microsoft/mai-voice-2-flash", name: "MAI Voice 2 Flash", kind: "tts" },
     { id: "openai/dall-e-3", name: "DALL-E 3 (via OpenRouter)", params: ["size","quality","style","response_format"], kind: "image" },
     { id: "openai/gpt-image-1", name: "GPT Image 1 (via OpenRouter)", params: ["n","size","quality","response_format"], kind: "image" },
     { id: "google/imagen-3.0-generate-002", name: "Imagen 3 (via OpenRouter)", params: ["n","size"], kind: "image" },
@@ -46,8 +63,10 @@ export default {
   ],
   serviceKinds: ["llm","embedding","tts","imageToText","video"],
   ttsConfig: {
-    baseUrl: "https://openrouter.ai/api/v1/chat/completions",
-    defaultModel: "openai/gpt-4o-mini-tts",
+    // Speech lives on its own endpoint; /chat/completions rejects every TTS model with
+    // "cannot be used with the chat/completions endpoint".
+    baseUrl: "https://openrouter.ai/api/v1/audio/speech",
+    defaultModel: "deepgram/flux-tts:free",
     headers: {"HTTP-Referer":"https://endpoint-proxy.local","X-Title":"Endpoint Proxy"},
   },
   embeddingConfig: {
