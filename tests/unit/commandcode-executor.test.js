@@ -4,6 +4,20 @@ import {
   inspectAndWrapCommandCodeResponse,
   CommandCodeExecutor,
 } from "../../open-sse/executors/commandcode.js";
+
+// `handleComboChat` reaches `saveErrorLog` on a fallback, and that writes to the real
+// SQLite database under `~/.9router` — so running this file left a bogus failure in the
+// operator's dashboard, naming a combo ("test-combo") and account that do not exist.
+// Mocking the persistence boundary keeps the test on its actual subject: the fallback
+// decision. `vi.mock` is hoisted above the imports, so it applies before `combo.js`
+// captures the binding. The mock is deliberately partial — only the writer is replaced,
+// so a future export consumed by the combo path still resolves normally instead of
+// crashing the suite with an undefined import.
+vi.mock("@/lib/usageDb.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, saveErrorLog: vi.fn(async () => "test-error-log-id") };
+});
+
 import { handleComboChat } from "../../open-sse/services/combo.js";
 
 function createNdjsonStream(lines) {
