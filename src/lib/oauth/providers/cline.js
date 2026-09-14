@@ -1,5 +1,43 @@
 import { CLINE_CONFIG } from "../constants/oauth.js";
 
+/**
+ * Remaining lifetime, in seconds, according to the access token's own `exp`.
+ *
+ * Preference order matters. Cline's OAuth code carries an `expiresAt` field, but
+ * that field is not the signed expiry: measured on a re-auth, the payload said the
+ * token had ~286s left while the JWT it accompanied was valid for another ~55
+ * minutes, and the token kept answering 200 well past the payload's timestamp. The
+ * gateway trusted the payload, stored a connection expiring 55 minutes early, and
+ * the background refresher (30-minute lead) then rotated the refresh token within
+ * minutes of every re-auth — needless churn on the one credential that cannot be
+ * regenerated once it dies. A JWT states its own expiry in `exp`, cryptographically
+ * bound to the token, so it wins; the payload timestamp stays as the fallback for
+ * opaque tokens, and 3600 as the last resort.
+ */
+const tokenLifetimeSeconds = (accessToken, expiresAt) => {
+  const fromJwt = () => {
+    if (typeof accessToken !== "string") return null;
+    const parts = accessToken.split(".");
+    if (parts.length !== 3) return null;
+    try {
+      const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
+      if (!Number.isFinite(payload?.exp)) return null;
+      return Math.floor(payload.exp - Date.now() / 1000);
+    } catch {
+      return null;
+    }
+  };
+  const fromPayload = () => {
+    if (!expiresAt) return null;
+    const ms = new Date(expiresAt).getTime();
+    if (!Number.isFinite(ms)) return null;
+    return Math.floor((ms - Date.now()) / 1000);
+  };
+  // An already-expired token still needs a positive value, otherwise callers treat
+  // 0 as "no expiry" and stop refreshing it entirely.
+  return Math.max(1, fromJwt() ?? fromPayload() ?? 3600);
+};
+
 const cline = {
   config: CLINE_CONFIG,
   flowType: "authorization_code",
@@ -51,9 +89,7 @@ const cline = {
   mapTokens: (tokens) => ({
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
-    expiresIn: tokens.expires_at
-      ? Math.floor((new Date(tokens.expires_at).getTime() - Date.now()) / 1000)
-      : 3600,
+    expiresIn: tokenLifetimeSeconds(tokens.access_token, tokens.expires_at),
     email: tokens.email,
     providerSpecificData: { firstName: tokens.firstName, lastName: tokens.lastName },
   }),
