@@ -24,7 +24,7 @@ import { injectCaveman } from "../rtk/caveman.js";
 import { injectPonytail } from "../rtk/ponytail.js";
 import { injectActiveSkills } from "../rtk/injectSkill.js";
 import { pruneContextMessages } from "../rtk/contextPruning.js";
-import { checkSemanticCache, saveToSemanticCache } from "../rtk/semanticCache.js";
+import { checkSemanticCache } from "../rtk/semanticCache.js";
 import { compressMessages, formatRtkLog } from "../rtk/index.js";
 import { compressWithHeadroom, formatHeadroomLog, formatHeadroomSizeLog, isHeadroomPhantomSavings } from "../rtk/headroom.js";
 import { compressWithPxpipe } from "../rtk/pxpipe.js";
@@ -75,6 +75,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   const reqTag = log?.tagForSession ? log.tagForSession(sessionSeed) : (log?.nextTag ? log.nextTag() : "");
 
   const sourceFormat = sourceFormatOverride || detectFormat(body);
+  const cacheKeyBody = semanticCacheEnabled ? structuredClone(body) : null;
 
   // Check for bypass patterns (warmup, skip, cc naming)
   const bypassResponse = handleBypassRequest(body, model, userAgent, ccFilterNaming);
@@ -82,7 +83,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   // Check Semantic / Duplicate Prompt Cache (for non-streaming requests)
   if (semanticCacheEnabled && !body.stream) {
-    const cachedResponse = checkSemanticCache(body, `${provider}/${model}`);
+    const cachedResponse = checkSemanticCache(cacheKeyBody, `${provider}/${model}`, apiKey);
     if (cachedResponse) {
       log?.info?.("CACHE", `⚡ Instant semantic cache hit for ${provider}/${model}`);
       return {
@@ -514,7 +515,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     return createErrorResult(statusCode, errMsg, resetsAtMs);
   }
 
-  const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log };
+  const sharedCtx = { provider, model, body, cacheKeyBody, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, semanticCacheEnabled, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log };
   const appendLog = (extra) => appendRequestLog({ model, provider, connectionId, ...extra }).catch(() => { });
   const trackDone = () => trackPendingRequest(model, provider, connectionId, false);
 

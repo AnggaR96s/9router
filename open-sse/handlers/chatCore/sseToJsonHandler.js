@@ -9,6 +9,7 @@ import { ROLE, RESPONSES_ITEM } from "../../translator/schema/index.js";
 // Responses-API providers (e.g. codex) may emit SSE without content-type + use Responses output shape
 const isResponsesProvider = (p) => PROVIDERS[p]?.format === FORMATS.OPENAI_RESPONSES;
 import { saveRequestDetail, appendRequestLog } from "@/lib/usageDb.js";
+import { saveToSemanticCache } from "../../rtk/semanticCache.js";
 
 function textFromResponsesMessageItem(item) {
   if (!item?.content || !Array.isArray(item.content)) return "";
@@ -179,7 +180,7 @@ export function parseSSEToOpenAIResponse(rawSSE, fallbackModel) {
  * Handle case: provider forced streaming but client wants JSON.
  * Supports both Codex/Responses API SSE and standard Chat Completions SSE.
  */
-export async function handleForcedSSEToJson({ providerResponse, sourceFormat, targetFormat, provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, customToolNames, trackDone, appendLog, reqTag, log }) {
+export async function handleForcedSSEToJson({ providerResponse, sourceFormat, targetFormat, provider, model, body, cacheKeyBody, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, semanticCacheEnabled, clientRawRequest, onRequestSuccess, customToolNames, trackDone, appendLog, reqTag, log }) {
   const contentType = providerResponse.headers.get("content-type") || "";
   const isSSE = contentType.includes("text/event-stream") || (contentType === "" && isResponsesProvider(provider));
   if (!isSSE) return null; // not handled here
@@ -225,6 +226,9 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
 
       // Client is Responses API → return as-is
       if (sourceFormat === FORMATS.OPENAI_RESPONSES) {
+        if (semanticCacheEnabled) {
+          saveToSemanticCache(cacheKeyBody || body, `${provider}/${model}`, jsonResponse, apiKey);
+        }
         return { success: true, response: new Response(JSON.stringify(jsonResponse), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }) };
       }
 
@@ -281,6 +285,9 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
         };
       }
 
+      if (semanticCacheEnabled) {
+        saveToSemanticCache(cacheKeyBody || body, `${provider}/${model}`, finalResp, apiKey);
+      }
       return { success: true, response: new Response(JSON.stringify(finalResp), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }) };
     } catch (err) {
       console.error("[ChatCore] Responses API SSE→JSON failed:", err);
@@ -351,6 +358,9 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
       ? chatCompletionToResponses(parsed, customToolNames)
       : parsed;
 
+    if (semanticCacheEnabled) {
+      saveToSemanticCache(cacheKeyBody || body, `${provider}/${model}`, finalBody, apiKey);
+    }
     return { success: true, response: new Response(JSON.stringify(finalBody), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }) };
   } catch (err) {
     console.error("[ChatCore] Chat Completions SSE→JSON failed:", err);
