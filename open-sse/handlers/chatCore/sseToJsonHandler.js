@@ -180,7 +180,7 @@ export function parseSSEToOpenAIResponse(rawSSE, fallbackModel) {
  * Handle case: provider forced streaming but client wants JSON.
  * Supports both Codex/Responses API SSE and standard Chat Completions SSE.
  */
-export async function handleForcedSSEToJson({ providerResponse, sourceFormat, targetFormat, provider, model, body, cacheKeyBody, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, semanticCacheEnabled, clientRawRequest, onRequestSuccess, customToolNames, trackDone, appendLog, reqTag, log }) {
+export async function handleForcedSSEToJson({ providerResponse, sourceFormat, targetFormat, provider, model, body, cacheKeyBody, cacheVariant, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, semanticCacheEnabled, clientRawRequest, onRequestSuccess, customToolNames, trackDone, appendLog, reqTag, log }) {
   const contentType = providerResponse.headers.get("content-type") || "";
   const isSSE = contentType.includes("text/event-stream") || (contentType === "" && isResponsesProvider(provider));
   if (!isSSE) return null; // not handled here
@@ -227,7 +227,7 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
       // Client is Responses API → return as-is
       if (sourceFormat === FORMATS.OPENAI_RESPONSES) {
         if (semanticCacheEnabled) {
-          saveToSemanticCache(cacheKeyBody || body, `${provider}/${model}`, jsonResponse, apiKey);
+          saveToSemanticCache(cacheKeyBody || body, `${provider}/${model}`, jsonResponse, apiKey, cacheVariant);
         }
         return { success: true, response: new Response(JSON.stringify(jsonResponse), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }) };
       }
@@ -286,7 +286,7 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
       }
 
       if (semanticCacheEnabled) {
-        saveToSemanticCache(cacheKeyBody || body, `${provider}/${model}`, finalResp, apiKey);
+        saveToSemanticCache(cacheKeyBody || body, `${provider}/${model}`, finalResp, apiKey, cacheVariant);
       }
       return { success: true, response: new Response(JSON.stringify(finalResp), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }) };
     } catch (err) {
@@ -359,7 +359,7 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
       : parsed;
 
     if (semanticCacheEnabled) {
-      saveToSemanticCache(cacheKeyBody || body, `${provider}/${model}`, finalBody, apiKey);
+      saveToSemanticCache(cacheKeyBody || body, `${provider}/${model}`, finalBody, apiKey, cacheVariant);
     }
     return { success: true, response: new Response(JSON.stringify(finalBody), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }) };
   } catch (err) {

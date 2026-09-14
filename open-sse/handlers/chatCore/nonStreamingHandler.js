@@ -283,7 +283,7 @@ export function translateNonStreamingResponse(responseBody, targetFormat, source
 /**
  * Handle non-streaming response from provider.
  */
-export async function handleNonStreamingResponse({ providerResponse, provider, model, sourceFormat, targetFormat, body, cacheKeyBody, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, semanticCacheEnabled, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, customToolNames, trackDone, appendLog, pxpipe, reqTag, log }) {
+export async function handleNonStreamingResponse({ providerResponse, provider, model, sourceFormat, targetFormat, body, cacheKeyBody, cacheVariant, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, semanticCacheEnabled, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, customToolNames, trackDone, appendLog, pxpipe, reqTag, log }) {
   trackDone();
   const contentType = providerResponse.headers.get("content-type") || "";
   let responseBody;
@@ -402,7 +402,7 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
   });
 
   if (semanticCacheEnabled) {
-    saveToSemanticCache(cacheKeyBody || body, `${provider}/${model}`, translatedResponse, apiKey);
+    saveToSemanticCache(cacheKeyBody || body, `${provider}/${model}`, translatedResponse, apiKey, cacheVariant);
   }
 
   return {
