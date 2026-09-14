@@ -769,6 +769,30 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
         const res = await fetch(`${host}/api/tags`);
         return { valid: res.ok, error: res.ok ? null : `Ollama not reachable at ${host}` };
       }
+      case "ollama-search": {
+        // Not /api/tags: that list is served publicly, so a garbage key still answers 200
+        // and the connection would be reported healthy without the key ever being read
+        // (checked live — a bogus key returns the full model list). The search endpoint
+        // is the only one that actually reads the credential: it answers 401 without a
+        // valid key and 200 with one. This mirrors the existing `ollama` case, whose
+        // /api/tags probe has the same blind spot; that one is left alone because the
+        // chat provider does not go through this switch.
+        const res = await fetchWithConnectionProxy("https://ollama.com/api/web_search", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${connection.apiKey}`,
+          },
+          body: JSON.stringify({ query: "test", max_results: 1 }),
+        }, effectiveProxy);
+        // 200 = key accepted. 401/403 = refused. Anything else (429 rate limit, 5xx)
+        // means the endpoint answered and the key was not rejected, which is all this
+        // probe can establish.
+        if (res.status === 401 || res.status === 403) {
+          return { valid: false, error: "Invalid API key" };
+        }
+        return { valid: true, error: null };
+      }
       case "deepgram": {
         const res = await fetchWithConnectionProxy("https://api.deepgram.com/v1/projects", { headers: { Authorization: `Token ${connection.apiKey}` } }, effectiveProxy);
         return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
@@ -930,6 +954,20 @@ case "llm7": {
           },
         }, effectiveProxy);
         return { valid: res.ok, error: res.ok ? null : "Invalid API key", refreshed: false };
+      }
+      case "jina-reader": {
+        // r.jina.ai is the fetch endpoint itself; hitting its root with the key is a
+        // read-free auth check. Verified live: a valid key and no key both answer 200
+        // (the service allows anonymous reads), while a bogus key answers 401
+        // AuthenticationFailedError — so the key IS inspected, which is what we need.
+        // Probing a real URL would work too but would spend a fetch per test.
+        const res = await fetchWithConnectionProxy("https://r.jina.ai/", {
+          headers: connection.apiKey ? { Authorization: `Bearer ${connection.apiKey}` } : {},
+        }, effectiveProxy);
+        if (res.status === 401 || res.status === 403) {
+          return { valid: false, error: "Invalid API key" };
+        }
+        return { valid: true, error: null };
       }
       default: {
         // Generic fallback: any provider whose registry entry declares a validateUrl
