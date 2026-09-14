@@ -4,10 +4,16 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import PropTypes from "prop-types";
 import { Modal, Button, Input } from "@/shared/components";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
+import { createSuccessHandoff } from "@/shared/utils/oauthSuccessHandoff";
 
 // Providers using the dynamic-port local callback proxy.
 // Browser OAuth: popup → auto callback → auto exchange → poll-status.
 const PROXY_OAUTH_PROVIDERS = new Set(["trae", "windsurf", "zed"]);
+
+// How long the confirmation screen stays up before the modal hands back to the caller.
+// Matches the iFlow cookie modal, which already proved the pause reads as a confirmation
+// rather than a stall.
+const SUCCESS_SCREEN_MS = 1500;
 
 // Providers offering a paste-token fallback (import-token flow).
 // UX warns if the IDE (which issues the token) is not installed.
@@ -56,6 +62,12 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
   const [isLocalhost, setIsLocalhost] = useState(false);
   const [placeholderUrl, setPlaceholderUrl] = useState("/callback?code=...");
   const callbackProcessedRef = useRef(false);
+  // Two-phase success handoff: show the confirmation, then notify the caller. See
+  // src/shared/utils/oauthSuccessHandoff.js for why it cannot be one synchronous call.
+  const handoffRef = useRef(null);
+  if (handoffRef.current === null) {
+    handoffRef.current = createSuccessHandoff({ delayMs: SUCCESS_SCREEN_MS });
+  }
 
   // Detect if running on localhost (client-side only)
   useEffect(() => {
@@ -68,6 +80,21 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
   }, []);
 
   // Define all useCallback hooks BEFORE the useEffects that reference them
+
+  // Show the confirmation, then hand back to the caller.
+  //
+  // Every success path below used to call `setStep("success")` and `onSuccess()` in the
+  // same tick. React batches both updates, so the caller's `setShowOAuthModal(false)` won
+  // the race and unmounted the modal before the confirmation could paint — which is why
+  // the success screen existed in the markup but was never seen. Deferring the handoff
+  // lets the screen render first, and gives the user a moment to read it.
+  //
+  // The pause matches IFlowCookieModal, which already does this and is the only flow where
+  // the confirmation is actually visible today.
+  const finishAuthentication = useCallback(() => {
+    setStep("success");
+    handoffRef.current.begin(() => onSuccess?.());
+  }, [onSuccess]);
 
   // Exchange tokens
   const exchangeTokens = useCallback(async (code, state) => {
@@ -88,13 +115,12 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setStep("success");
-      onSuccess?.();
+      finishAuthentication();
     } catch (err) {
       setError(err.message);
       setStep("error");
     }
-  }, [authData, provider, onSuccess, oauthMeta]);
+  }, [authData, provider, finishAuthentication, oauthMeta]);
 
   const completeXaiManualCode = useCallback(async (code) => {
     if (!authData?.state) return;
@@ -107,13 +133,12 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setStep("success");
-      onSuccess?.();
+      finishAuthentication();
     } catch (err) {
       setError(err.message);
       setStep("error");
     }
-  }, [authData, onSuccess]);
+  }, [authData, finishAuthentication]);
 
   // Poll for device code token
   const startPolling = useCallback(async (deviceCode, codeVerifier, interval, extraData, deadlineMs) => {
@@ -153,9 +178,8 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
 
         if (data.success) {
           pollingAbortRef.current = true; // Stop polling immediately
-          setStep("success");
           setPolling(false);
-          onSuccess?.();
+          finishAuthentication();
           return;
         }
 
@@ -177,7 +201,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
     setError("Authorization timeout");
     setStep("error");
     setPolling(false);
-  }, [provider, onSuccess]);
+  }, [provider, finishAuthentication]);
 
   // Trae/Windsurf proxy OAuth flow: dynamic-port local callback → auto exchange.
   const startProxyFlow = useCallback(async (providerId) => {
@@ -430,6 +454,8 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
     } else if (!isOpen) {
       // Abort polling and cleanup proxy when modal closes
       pollingAbortRef.current = true;
+      // A pending success handoff must not fire into a closed modal.
+      handoffRef.current.cancel();
       openedRef.current = false;
       if (provider === "codex") {
         fetch("/api/oauth/codex/stop-proxy").catch(() => {});
@@ -471,8 +497,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         if (cancelled || callbackProcessedRef.current) return;
         if (data.status === "done") {
           callbackProcessedRef.current = true;
-          setStep("success");
-          onSuccess?.();
+          finishAuthentication();
           return;
         }
         if (data.status === "error") {
@@ -494,7 +519,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
     };
     setTimeout(tick, POLL_INTERVAL_MS);
     return () => { cancelled = true; };
-  }, [authData, onSuccess]);
+  }, [authData, finishAuthentication]);
 
   // Listen for OAuth callback via multiple methods
   useEffect(() => {
@@ -593,8 +618,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        setStep("success");
-        onSuccess?.();
+        finishAuthentication();
         return;
       }
 
@@ -609,8 +633,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        setStep("success");
-        onSuccess?.();
+        finishAuthentication();
         return;
       }
 
@@ -657,8 +680,17 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
     }
   };
 
+  // A success handoff still in flight must not fire after unmount.
+  useEffect(() => {
+    return () => handoffRef.current.cancel();
+  }, []);
+
   // Clear session on modal close + cleanup proxy
   const handleClose = useCallback(() => {
+    // If the user dismissed the confirmation before the automatic handoff fired, deliver
+    // it now so the caller still learns the flow succeeded. Returns false for an ordinary
+    // "Cancel" mid-flow, which must not be reported as a success.
+    handoffRef.current.commitNow();
     if (provider === "codex") {
       fetch("/api/oauth/codex/stop-proxy").catch(() => {});
     } else if (provider === "xai") {
