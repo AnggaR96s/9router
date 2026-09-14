@@ -9,6 +9,7 @@ import {
   refreshProviderCredentials,
   shouldRefreshCredentials,
 } from "open-sse/services/oauthCredentialManager.js";
+import { getAccessToken } from "open-sse/services/tokenRefresh.js";
 import {
   GEMINI_CONFIG,
   ANTIGRAVITY_CONFIG,
@@ -175,6 +176,22 @@ const OAUTH_TEST_CONFIG = {
     },
   },
   // Freebuff — probe the session endpoint (GET never claims a session).
+  nous: {
+    // Portal device flow. Two things differ from the other entries here:
+    //
+    //  - The refresh token rides in the X-Nous-Refresh-Token header, not the body, so the
+    //    generic refresh path (refreshOAuthToken) cannot serve it. provider-specific
+    //    refresh lives in refreshNousPortalToken; `refreshProvider` routes there.
+    //  - /v1/models is PUBLIC — a garbage key returns 200 with the full catalog — so it
+    //    cannot validate anything. /api/oauth/account does: 200 for a real token and
+    //    401 invalid_token for a bogus one (checked live).
+    url: "https://portal.nousresearch.com/api/oauth/account",
+    method: "GET",
+    authHeader: "Authorization",
+    authPrefix: "Bearer ",
+    extraHeaders: { Accept: "application/json" },
+    refreshable: true,
+  },
   freebuff: {
     url: "https://www.codebuff.com/api/v1/freebuff/session",
     method: "GET",
@@ -305,6 +322,14 @@ async function refreshOAuthToken(connection) {
 
     if (provider === "codex" || provider === "grok-cli" || provider === "xai") {
       return await refreshProviderCredentials(provider, connection, console);
+    }
+
+    // Nous Portal mirrors the above: its refresh token is sent in a header, so the
+    // dedicated refreshNousPortalToken handler owns it rather than the shared path.
+    if (provider === "nous") {
+      const tt = await getAccessToken(provider, connection, console);
+      if (!tt) return null;
+      return { accessToken: tt.accessToken, expiresIn: tt.expiresIn, refreshToken: tt.refreshToken || refreshToken };
     }
 
     if (provider === "claude") {
