@@ -175,6 +175,22 @@ describe("semantic cache variant", () => {
     expect(executeMock).toHaveBeenCalledTimes(2);
   });
 
+  it("shares the plain entry when a skill is switched off (no skill is injected)", async () => {
+    const body = () => requestBody("skill-off-shares-plain");
+
+    await handleChatCore(coreOptions(body(), { activeSkillIds: [] }));
+    expect(executeMock).toHaveBeenCalledTimes(1);
+
+    const off = await handleChatCore(
+      coreOptions(body(), {
+        activeSkillIds: ["commit-lint"],
+        skillRoutingModes: { "commit-lint": "off" },
+      })
+    );
+    expect(off.response.headers.get("X-9Router-Cache")).toBe("HIT");
+    expect(executeMock).toHaveBeenCalledTimes(1);
+  });
+
   it("does not serve a provider thinking-mode change the old answer", async () => {
     const body = () => requestBody("thinking-mode-variant-test");
 
