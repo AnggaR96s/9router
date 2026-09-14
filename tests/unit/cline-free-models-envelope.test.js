@@ -229,18 +229,42 @@ describe("cline /api/v1/models aggregation (resolveClineModels vs resolveClinepa
   });
 
   it("resolveClineModels returns all models (including free-tier)", async () => {
+    // The live /models list is what the account may call, but Cline's free tier is NOT in
+    // it — every `cline-free/*` id answers "not found" against /models while still working
+    // on /chat/completions. The resolver therefore unions the live list with the registry's
+    // models, so both halves must survive. Counted exactly: live ids plus whatever the
+    // registry adds that the live list does not already carry.
     const { resolveClineModels } = await import("../../open-sse/services/clinepassModels.js");
+    const { default: clineRegistry } = await import("../../open-sse/providers/registry/cline.js");
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => API_RESPONSE,
     });
     const result = await resolveClineModels({ accessToken: "test-token" });
     expect(result).not.toBeNull();
-    expect(result.models).toHaveLength(4);
     const ids = result.models.map((m) => m.id);
     expect(ids).toContain("cline-pass/deepseek-v4-flash");
     expect(ids).toContain("z-ai/glm-5.3-flash");
     expect(ids).toContain("z-ai/deepseek-v4-flash");
+
+    const registryOnly = (clineRegistry.models || [])
+      .map((m) => m.id)
+      .filter((id) => !API_RESPONSE.some((a) => a.id === id));
+    expect(result.models).toHaveLength(API_RESPONSE.length + registryOnly.length);
+    // No duplicates when the live list and the registry overlap.
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("resolveClineModels surfaces the free tier the live list omits", async () => {
+    // Regression guard for the reason this union exists: without it the registry's free
+    // models are defined but never reach /v1/models, because the live resolver replaces the
+    // static list rather than extending it.
+    const { resolveClineModels } = await import("../../open-sse/services/clinepassModels.js");
+    fetchMock.mockResolvedValue({ ok: true, json: async () => API_RESPONSE });
+    const result = await resolveClineModels({ accessToken: "test-token" });
+    const ids = result.models.map((m) => m.id);
+    expect(ids).toContain("cline-free/deepseek-v4.1-flash");
+    expect(ids.some((id) => id.startsWith("cline-free/"))).toBe(true);
   });
 
   it("resolveClinepassModels returns only cline-pass/ models", async () => {
@@ -266,7 +290,9 @@ describe("cline /api/v1/models aggregation (resolveClineModels vs resolveClinepa
     });
     const result = await resolveClineModels({ accessToken: "test-token" });
     expect(result).not.toBeNull();
-    expect(result.models).toHaveLength(4);
+    // Same union as above — assert the enveloped list survived, not a fixed total.
+    const ids = result.models.map((m) => m.id);
+    for (const entry of API_RESPONSE) expect(ids).toContain(entry.id);
   });
 
   it("resolveClineModels returns null when no token", async () => {

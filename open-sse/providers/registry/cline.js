@@ -38,6 +38,7 @@ export default {
   models: [
     // Free tier (source: api.cline.bot/api/v1/ai/cline/recommended-models → free[])
     // Feed is live & public; these are the models a free Cline account can use.
+    { id: "cline-free/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash (Free)" },
     { id: "cline-free/muse-spark-1.3-contributor", name: "Muse Spark 1.3 Contributor (Free)" },
     { id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash (Free)" },
     { id: "z-ai/glm-5.3-flash", name: "GLM 5.3 Flash (Free)" },

@@ -91,5 +91,25 @@ export async function resolveClineModels(credentials) {
       name: m.name || m.id,
     }));
 
-  return models.length ? { models } : null;
+  if (!models.length) return null;
+
+  // The live /models list is what this account may call, but it is NOT the whole story:
+  // Cline's free tier is absent from it entirely. Every `cline-free/*` id — the ones the
+  // public free-tier feed advertises — returns "not found" against /models, yet answers
+  // 200 on /chat/completions when it carries a Cline client header. Because the live
+  // resolver replaces the registry outright in /v1/models (see the `liveResolver` branch
+  // in src/app/api/v1/models/route.js), those free models were defined in the registry but
+  // never surfaced anywhere in the dashboard. Union the two so the free tier appears.
+  //
+  // Files are imported directly (not via the providers barrel) to keep this module free of
+  // the server-side dependencies the barrel pulls in.
+  const { default: clineRegistry } = await import("../providers/registry/cline.js");
+  const seen = new Set(models.map((m) => m.id));
+  for (const entry of clineRegistry?.models || []) {
+    if (!entry?.id || seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    models.push({ id: entry.id, name: entry.name || entry.id });
+  }
+
+  return { models };
 }
