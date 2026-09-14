@@ -22,7 +22,7 @@ import { detectClientTool, isNativePassthrough } from "../utils/clientDetector.j
 import { dedupeTools } from "../utils/toolDeduper.js";
 import { injectCaveman } from "../rtk/caveman.js";
 import { injectPonytail } from "../rtk/ponytail.js";
-import { injectActiveSkills } from "../rtk/injectSkill.js";
+import { injectActiveSkills, buildSkillVariant } from "../rtk/injectSkill.js";
 import { pruneContextMessages } from "../rtk/contextPruning.js";
 import { checkSemanticCache } from "../rtk/semanticCache.js";
 import { compressMessages, formatRtkLog } from "../rtk/index.js";
@@ -77,13 +77,36 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   const sourceFormat = sourceFormatOverride || detectFormat(body);
   const cacheKeyBody = semanticCacheEnabled ? structuredClone(body) : null;
 
+  // Per-request opt-out: client can bypass all token savers via header
+  const tokenSaverEnabled = clientRawRequest?.headers?.[TOKEN_SAVER_HEADER]?.toLowerCase() !== "off";
+
+  // Fingerprint of every per-request input that reshapes the outbound body but
+  // lives OUTSIDE it: skill config (x-skill header / dashboard), the token-saver
+  // opt-out, and the saver toggles. The cache key hashes the client body, so
+  // without this a request asking for a skill would be served the answer cached
+  // without it — and the reverse. Every input below is already in scope, so the
+  // fingerprint costs no extra I/O.
+  const cacheVariant = semanticCacheEnabled
+    ? [
+      `sk=${await buildSkillVariant(cacheKeyBody || body, activeSkillIds, skillRoutingModes)}`,
+      `ts=${tokenSaverEnabled ? "on" : "off"}`,
+      `rtk=${tokenSaverEnabled && rtkEnabled ? 1 : 0}`,
+      `cp=${tokenSaverEnabled && contextPruningEnabled ? maxMessagesLimit || 20 : 0}`,
+      `cv=${tokenSaverEnabled && cavemanEnabled ? cavemanLevel || "full" : ""}`,
+      `pt=${tokenSaverEnabled && ponytailEnabled ? ponytailLevel || "full" : ""}`,
+      `hr=${tokenSaverEnabled && headroomEnabled ? 1 : 0}${headroomCompressUserMessages ? 1 : 0}`,
+      `px=${pxpipeEnabled ? 1 : 0}/${pxpipeMinChars || ""}`,
+      `th=${providerThinking?.mode || "auto"}`,
+    ].join("|")
+    : null;
+
   // Check for bypass patterns (warmup, skip, cc naming)
   const bypassResponse = handleBypassRequest(body, model, userAgent, ccFilterNaming);
   if (bypassResponse) return bypassResponse;
 
   // Check Semantic / Duplicate Prompt Cache (for non-streaming requests)
   if (semanticCacheEnabled && !body.stream) {
-    const cachedResponse = checkSemanticCache(cacheKeyBody, `${provider}/${model}`, apiKey);
+    const cachedResponse = checkSemanticCache(cacheKeyBody, `${provider}/${model}`, apiKey, cacheVariant);
     if (cachedResponse) {
       log?.info?.("CACHE", `⚡ Instant semantic cache hit for ${provider}/${model}`);
       return {
@@ -268,9 +291,6 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   if (shouldDefaultClaudeToolType(provider, finalFormat, translatedBody.tools, PROVIDERS)) {
     translatedBody.tools = defaultClaudeToolType(translatedBody.tools);
   }
-
-  // Per-request opt-out: client can bypass all token savers via header
-  const tokenSaverEnabled = clientRawRequest?.headers?.[TOKEN_SAVER_HEADER]?.toLowerCase() !== "off";
 
   // RTK: compress tool_result content
   const rtkStats = compressMessages(translatedBody, tokenSaverEnabled && rtkEnabled);
@@ -515,7 +535,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     return createErrorResult(statusCode, errMsg, resetsAtMs);
   }
 
-  const sharedCtx = { provider, model, body, cacheKeyBody, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, semanticCacheEnabled, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log };
+  const sharedCtx = { provider, model, body, cacheKeyBody, cacheVariant, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, semanticCacheEnabled, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log };
   const appendLog = (extra) => appendRequestLog({ model, provider, connectionId, ...extra }).catch(() => { });
   const trackDone = () => trackPendingRequest(model, provider, connectionId, false);
 

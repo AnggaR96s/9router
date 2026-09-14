@@ -111,9 +111,10 @@ describe("semantic response cache", () => {
     const firstBody = requestBody("cache-hit-test");
     const first = await handleChatCore(coreOptions(firstBody, "key-A"));
     expect(first.success).toBe(true);
-    expect(checkSemanticCache(firstBody, "deepseek/deepseek-chat", "key-A"))
-      .toMatchObject({ id: "response-1" });
 
+    // The handler now keys entries by its per-request variant too, so the hit is
+    // verified through the pipeline (X-9Router-Cache) rather than by poking the
+    // cache module with a key the handler would never build itself.
     const hit = await handleChatCore(coreOptions(requestBody("cache-hit-test"), "key-A"));
     expect(hit.response.headers.get("X-9Router-Cache")).toBe("HIT");
     expect(executeMock).toHaveBeenCalledTimes(1);

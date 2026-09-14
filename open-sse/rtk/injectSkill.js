@@ -1,5 +1,6 @@
 // injectSkill.js — inject active add-on skill prompts into the system prompt
 // of routed chat requests. Independent of token-saver toggles.
+import crypto from "crypto";
 import { getInstalledSkills } from "@/lib/skillsRegistry.js";
 import { injectSystemPrompt } from "./systemInject.js";
 
@@ -101,7 +102,11 @@ function smartMatches(text, keywords) {
   });
 }
 
-export async function injectActiveSkills(body, format, activeSkillIds, routingModes) {
+// Resolve which installed skills a request would inject: skips unknown ids,
+// per-skill mode "off", and "smart" skills whose keywords are absent from the
+// recent user turns. Shared by the injector and by buildSkillVariant so the
+// cache key and the actual injection can never disagree about the selection.
+async function resolveSkillsToInject(body, activeSkillIds, routingModes) {
   if (!activeSkillIds || !Array.isArray(activeSkillIds) || activeSkillIds.length === 0) {
     return [];
   }
@@ -114,9 +119,8 @@ export async function injectActiveSkills(body, format, activeSkillIds, routingMo
 
   const modes = routingModes && typeof routingModes === "object" ? routingModes : {};
   const text = userText(body);
-  const smartTextNeeded = Object.values(modes).some((m) => m === "smart");
 
-  const injected = [];
+  const resolved = [];
   for (const rawId of activeSkillIds) {
     const id = String(rawId).trim().toLowerCase();
     const skill = lookup.get(id);
@@ -125,8 +129,44 @@ export async function injectActiveSkills(body, format, activeSkillIds, routingMo
     const mode = modes[id] ?? skill.routingMode ?? "always";
     if (mode === "off") continue;
     if (mode === "smart" && !smartMatches(text, skill.keywords || [])) continue;
-    injectSkillBlock(body, format, skill.id, skill.prompt);
-    injected.push(skill.id.toLowerCase());
+    resolved.push(skill);
   }
-  return injected;
+  return resolved;
+}
+
+// Fingerprint of the skill configuration that may affect this request. Skill
+// settings live outside the request body (x-skill header, dashboard settings),
+// so they are invisible to a body-only cache key: without this, a request that
+// asks for a skill is served the answer cached without it, and the reverse.
+// Include smart-mode candidates conservatively: cache lookup runs before the
+// translated provider body exists, so over-separating is safer than serving an
+// answer generated under a different prompt. Prompt content is included because
+// updating a skill changes the outbound body without changing the client's.
+export async function buildSkillVariant(_body, activeSkillIds, routingModes) {
+  if (!Array.isArray(activeSkillIds) || activeSkillIds.length === 0) return "";
+
+  const modes = routingModes && typeof routingModes === "object" ? routingModes : {};
+  const allSkills = await getInstalledSkills();
+  const lookup = new Map(allSkills.filter((s) => s.prompt).map((s) => [s.id.toLowerCase(), s]));
+  const fingerprints = new Map();
+
+  for (const rawId of activeSkillIds) {
+    const id = String(rawId).trim().toLowerCase();
+    const skill = lookup.get(id);
+    if (!skill) continue;
+    const mode = modes[id] ?? skill.routingMode ?? "always";
+    if (mode === "off") continue;
+    const digest = crypto.createHash("sha256").update(String(skill.prompt)).digest("hex").slice(0, 16);
+    fingerprints.set(id, `${id}:${mode}:${digest}`);
+  }
+
+  return [...fingerprints.values()].sort().join(",");
+}
+
+export async function injectActiveSkills(body, format, activeSkillIds, routingModes) {
+  const skills = await resolveSkillsToInject(body, activeSkillIds, routingModes);
+  for (const skill of skills) {
+    injectSkillBlock(body, format, skill.id, skill.prompt);
+  }
+  return skills.map((s) => s.id.toLowerCase());
 }

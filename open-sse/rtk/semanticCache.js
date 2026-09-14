@@ -7,22 +7,22 @@ import crypto from "crypto";
 const responseCache = new Map();
 const CACHE_TTL_MS = 3 * 60 * 60 * 1000;
 
-function cacheKey(body, model, apiKey) {
+function cacheKey(body, model, apiKey, variant) {
   if (!apiKey) return null;
   try {
     return crypto.createHash("sha256")
-      .update(JSON.stringify({ apiKey, model, body }))
+      .update(JSON.stringify({ apiKey, model, variant: variant || "", body }))
       .digest("hex");
   } catch {
     return null;
   }
 }
 
-export function checkSemanticCache(body, model, apiKey) {
+export function checkSemanticCache(body, model, apiKey, variant) {
   if (!body || body.stream) return null;
   if (body.tool_choice && body.tool_choice !== "auto") return null;
 
-  const hashKey = cacheKey(body, model, apiKey);
+  const hashKey = cacheKey(body, model, apiKey, variant);
   if (!hashKey) return null;
 
   const cached = responseCache.get(hashKey);
@@ -46,12 +46,12 @@ export function checkSemanticCache(body, model, apiKey) {
   return null;
 }
 
-export function saveToSemanticCache(body, model, responseBody, apiKey) {
+export function saveToSemanticCache(body, model, responseBody, apiKey, variant) {
   if (!body || body.stream || !responseBody) return;
   if (body.tool_choice && body.tool_choice !== "auto") return;
   if (responseBody.error || responseBody.is_error) return;
 
-  const hashKey = cacheKey(body, model, apiKey);
+  const hashKey = cacheKey(body, model, apiKey, variant);
   if (!hashKey) return;
 
   // Deep-copy on the way in. The caller keeps using its own reference right after
