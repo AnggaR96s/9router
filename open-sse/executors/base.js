@@ -154,6 +154,15 @@ export class BaseExecutor {
 
         if (await tryRetry(urlIndex, response.status, `status ${response.status}`, response)) { urlIndex--; continue; }
 
+        // Some credentials have more than one valid wire shape and only the
+        // provider knows which one it accepts (Cline: login-minted tokens go raw,
+        // refresh-minted ones need a `workos:` prefix). Subclass hook — absent for
+        // every other provider, so this is a no-op unless opted in. One shot only;
+        // the hook is responsible for not retrying the same shape twice.
+        if (response.status === HTTP_STATUS.UNAUTHORIZED && typeof this.retryAlternativeAuth === "function") {
+          if (await this.retryAlternativeAuth(credentials, log)) { continue; }
+        }
+
         if (this.shouldRetry(response.status, urlIndex)) {
           log?.debug?.("RETRY", `${response.status} on ${url}, trying fallback ${urlIndex + 1}`);
           lastStatus = response.status;
