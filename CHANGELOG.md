@@ -1,3 +1,83 @@
+# v0.1.12 (2026-09-15)
+
+## Features
+
+- **New Cline model: `cline-free/deepseek-v4.1-flash`**, and the free tier is now
+  visible again. Cline's model list comes from a live resolver, and in `/v1/models` a
+  live resolver *replaces* the static registry list instead of extending it. Cline's own
+  `/api/v1/models` returns 445 ids and **not one** begins with `cline-free/`, so every
+  free-tier entry was defined, reachable by id, and impossible to select in the UI. The
+  resolver now unions the two sources and dedupes on id. These ids are absent from
+  `/models` yet fully callable — `cline-free/deepseek-v4.1-flash` answered `2+2 = 4`
+  through the gateway — but only when the request carries a Cline client header;
+  without one the API refuses it with 403 "only available via Cline product surfaces",
+  which the executor's existing headers already satisfy.
+- **OpenRouter TTS: two free models, and the provider actually works.** Added
+  `deepgram/flux-tts:free` (now the default) and `fish-audio/s2.1-pro-free:free`, plus the
+  16 other speech models the Models API reports today. Voice catalogs are scoped per
+  model — 36 flux voices and 90 Aura-2 voices, read from the API's own response — because
+  a flux model handed an Aura voice answers 400, and fish-audio rejects any voice it does
+  not know.
+
+## Fixes
+
+- **The OAuth success confirmation now appears.** The "Connected Successfully!" screen
+  was dead code: the success path called `onSuccess()` in the same tick it set the step,
+  so the modal unmounted before the screen could paint. The hand-off is deferred and
+  moved into its own tested helper, with the "Done" button able to flush it early.
+- **OpenRouter speech was broken end to end, not merely outdated.** The adapter posted to
+  `/chat/completions` with `modalities: ["text","audio"]`, which OpenRouter now rejects for
+  every speech model. It speaks to `/api/v1/audio/speech`. The three configured models
+  (`openai/tts-1`, `tts-1-hd`, `gpt-4o-mini-tts`) all answer "does not exist" — including
+  the one wired up as `defaultModel` — so the default was dead even with a working
+  endpoint.
+- **Cline's raw response envelope no longer leaks on streaming requests.** A client
+  sending no `stream` field received `{"data":{"choices":[...]}}` with no `data:` framing
+  and no `[DONE]`, unparseable for any OpenAI-compatible client. Two faults stacked:
+  `unwrapClineEnvelope` required `success === true`, but the body the API returns has no
+  such field; and the streaming guard lets `application/json` through, so a JSON success
+  body reached the SSE pipe. The unwrapper now matches by shape and the stream path
+  re-frames recognised bodies as one chunk plus `[DONE]`.
+- **Cline no longer loops on `invalid_grant`.** The stored token lifetime came from
+  `expires_in` while the JWT carries its own `exp`, so the refresh ran against a token the
+  server still considered valid. The lifetime is now taken from the token itself.
+- **Cline sends the token shape the account actually needs.** A login-minted token is sent
+  raw and a refresh-minted one prefixed with `workos:`; sending either the wrong way
+  answered 401 "re-authenticate your Cline account", which reads like a dead credential
+  while the token is valid.
+- **Nous Research OAuth connections can be tested.** The provider was missing from
+  `OAUTH_TEST_CONFIG`, so the Test button always answered "Provider test not supported"
+  even with a valid token. It probes `/api/oauth/account`, not the public `/v1/models`
+  (which answers 200 for a garbage key), and routes refresh through the Portal handler
+  that carries the refresh token in a header.
+- **`ollama-search` and `jina-reader` can be tested.** Both answered "Provider test not
+  supported". Ollama's obvious probe, `/api/tags`, is served publicly — a bogus key
+  returns the full model list with 200 — so probing there would have reported a dead key
+  as healthy; the search endpoint is the one that reads the credential. Jina's service
+  root doubles as an auth check.
+- **CodeBuddy intl is tested for real**, instead of the China endpoint standing in for it
+  and reporting a fake result.
+- **The response cache stores, and is scoped per API key.** It was writing entries it
+  could never read back.
+- **Cached responses are scoped to skill and saver variants.** The key hashed only the
+  client body, model and API key, while skill config, token-saver toggles and provider
+  thinking settings live outside the body — so a request could be served an answer
+  generated under different settings. (Contributed by @bagus02, PR #4.)
+- **The header no longer carries a Donate button**, and Language moved into the menu.
+- **Clearing all error logs asks for confirmation in-app** rather than a browser dialog.
+
+## Internal
+
+- Provider logos for **Deepgram** and **AssemblyAI** were other companies' marks —
+  `deepgram.png` was byte-identical to `anthropic.png` and `assemblyai.png` to
+  `openai.png`. Both now carry their own official asset.
+- The CommandCode fallback test wrote a fabricated `Combo: test-combo` row into the
+  operator's database on every full-suite run. The leak came from an un-awaited
+  `saveErrorLog`, and is closed at the source with a module mock rather than by isolating
+  the whole suite.
+- Guard tests added: OpenRouter TTS, search/fetch provider tests, the Cline envelope,
+  the Nous OAuth probe, and the OAuth hand-off helper.
+
 # v0.1.11 (2026-09-13)
 
 ## Features
