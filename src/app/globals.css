@@ -750,7 +750,7 @@ button:disabled,
      Kept for anything that reads the token directly, but note that Tailwind v4
      hardcodes `.font-sans`'s stack, so the body face is actually switched by
      the `.font-sans` override further down. */
-  --font-sans: var(--font-space-grotesk), 'Space Grotesk', system-ui, sans-serif;
+  --font-sans: var(--font-montserrat), 'Montserrat', system-ui, sans-serif;
 
   color-scheme: light;
 }
@@ -1011,24 +1011,30 @@ button:disabled,
 }
 
 /* Headings and the brand mark take the display face; body copy stays calm.
-   Weight is viewport-aware because the same heading is set ~10px smaller on a
-   phone (the page title is `text-base lg:text-2xl`, so 16px at 390px wide).
-   Syne at 800 is a display weight: at that size it reads as a smeared blob,
-   and 59 elements on one page were rendering at 800. Small screens drop to
-   700 and relax the tracking; the desktop shout is unchanged. */
+   This theme carries no bold. Headings sit at 500 on every viewport, and the
+   utilities that would otherwise shout are capped just below: `.font-semibold`
+   (246 uses), `.font-bold` (52), `.font-black` (2) and the <strong>/<b> tags.
+   Hierarchy comes from size, borders and colour rather than type weight. */
 [data-visual="neubrutalist"] h1,
 [data-visual="neubrutalist"] h2,
 [data-visual="neubrutalist"] h3 {
-  font-family: var(--font-syne), 'Syne', system-ui, sans-serif;
-  font-weight: 700;
+  font-family: var(--font-montserrat), 'Montserrat', system-ui, sans-serif;
+  font-weight: 500;
   letter-spacing: -0.01em;
+}
+
+/* Deliberately unlayered: Tailwind v4 emits its utilities inside
+   `@layer utilities`, and an unlayered normal declaration outranks a layered
+   one, so this lands without `!important`. Specificity (0,2,0) already beats
+   the bare utility (0,1,0). */
+[data-visual="neubrutalist"] :is(.font-semibold, .font-bold, .font-black, strong, b) {
+  font-weight: 500;
 }
 
 @media (min-width: 768px) {
   [data-visual="neubrutalist"] h1,
   [data-visual="neubrutalist"] h2,
   [data-visual="neubrutalist"] h3 {
-    font-weight: 800;
     letter-spacing: -0.02em;
   }
 }
@@ -1041,7 +1047,7 @@ button:disabled,
 [data-visual="neubrutalist"].font-sans,
 [data-visual="neubrutalist"] .font-sans,
 [data-visual="neubrutalist"] body {
-  font-family: var(--font-space-grotesk), 'Space Grotesk', system-ui, sans-serif;
+  font-family: var(--font-montserrat), 'Montserrat', system-ui, sans-serif;
 }
 
 /* Monospace slots (IDs, keys, URLs) use the style's mono face. */

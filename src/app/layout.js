@@ -1,4 +1,4 @@
-import { Inter, Syne, Space_Grotesk, Space_Mono } from "next/font/google";
+import { Inter, Montserrat, Space_Mono } from "next/font/google";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import "material-symbols/outlined.css";
 import "./globals.css";
@@ -19,8 +19,7 @@ const inter = Inter({
 // Neubrutalist typefaces. Loaded unconditionally (small, and next/font inlines
 // them into the build) so switching the visual theme needs no network at
 // runtime; they are only *used* inside the [data-visual="neubrutalist"] block.
-const syne = Syne({ subsets: ["latin"], variable: "--font-syne" });
-const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
+const montserrat = Montserrat({ subsets: ["latin"], variable: "--font-montserrat" });
 const spaceMono = Space_Mono({
   subsets: ["latin"],
   weight: ["400", "700"],
@@ -43,13 +42,35 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Apply persisted theme before first paint so a reload does not flash the
-            default (light) theme before the client store hydrates. Mirrors the
-            zustand-persist "theme" key, the `dark` class applyTheme() sets, and
-            the data-visual attribute the visual-theme axis sets. */}
+        {/* Theme bootstrap, in two parts — the order matters.
+
+            1. The gate. This script sits after Next's stylesheet <link>, and an
+               inline script does not execute until the stylesheets ahead of it
+               finish parsing. For those first frames the document is therefore
+               styled with the *default* theme and no [data-visual], which is the
+               flash on reload this guards against. The gate keeps the body
+               unpainted until part 2 has run. <noscript> lifts it when JS is off.
+
+            2. The bootstrap. Mirrors the zustand-persist "theme" key, the `dark`
+               class applyTheme() sets, and the data-visual attribute the
+               visual-theme axis sets, then marks the document ready to paint.
+               The marker is set outside the try/catch so a corrupt localStorage
+               value can never leave the gate closed. */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: "html:not([data-theme-ready]) body{visibility:hidden}",
+          }}
+        />
+        <noscript>
+          <style
+            dangerouslySetInnerHTML={{
+              __html: "html body{visibility:visible!important}",
+            }}
+          />
+        </noscript>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem('theme');var st=s?(JSON.parse(s).state||{}):{};var t=st.theme||'system';var m=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(t==='system'&&m)){document.documentElement.classList.add('dark')}var v=st.visualTheme;if(v&&v!=='default'){document.documentElement.setAttribute('data-visual',v)}}catch(e){}})();`,
+            __html: `(function(){var r=document.documentElement;try{var s=localStorage.getItem('theme');var st=s?(JSON.parse(s).state||{}):{};var t=st.theme||'system';var m=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(t==='system'&&m)){r.classList.add('dark')}var v=st.visualTheme;if(v&&v!=='default'){r.setAttribute('data-visual',v)}}catch(e){}r.setAttribute('data-theme-ready','')})();`,
           }}
         />
         <script
@@ -58,7 +79,7 @@ export default function RootLayout({ children }) {
           }}
         />
       </head>
-      <body className={`${inter.variable} ${syne.variable} ${spaceGrotesk.variable} ${spaceMono.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} ${montserrat.variable} ${spaceMono.variable} font-sans antialiased`}>
         <ThemeProvider>
           <RuntimeI18nProvider>
             {children}
