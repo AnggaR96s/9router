@@ -77,8 +77,19 @@ jobs:
         run: npm publish
         working-directory: cli
 
+      # Dry run: exercise the exact same build + pack path without publishing,
+      # so a broken bundle shows up as a red CI run rather than a bad release.
+      - name: Dry run — build and inspect tarball
+        if: ${{ inputs.dry_run }}
+        run: |
+          npm run build
+          npm pack --dry-run
+        working-directory: cli
+
       - name: Pack tarball summary
         run: |
-          echo "### Published package" >> "$GITHUB_STEP_SUMMARY"
-          node -p "'name: ' + require('./cli/package.json').name + '  version: ' + require('./cli/package.json').version" >> "$GITHUB_STEP_SUMMARY"
-          du -sh cli/app >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Package"
+            node -p "'name: ' + require('./cli/package.json').name + '  version: ' + require('./cli/package.json').version"
+            if [ -d cli/app ]; then du -sh cli/app; else echo "cli/app not built (dry run without build)"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
