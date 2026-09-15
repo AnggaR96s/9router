@@ -132,6 +132,7 @@ import p129 from "./orcarouter.js";
 import p130 from "./apinex.js";
 import p131 from "./qwen.js";
 import p132 from "./unikey.js";
+import p133 from "./atria.js";
 export default [
   p0,
   p1,
@@ -264,4 +265,5 @@ export default [
   p130,
   p131,
   p132,
+  p133,
 ];
