@@ -719,6 +719,25 @@ button:disabled,
   --color-warning: #D9822B;
   --color-info: #2F6FED;
 
+  /* ---- Text-safe accent steps. The fills above are tuned to be FILLS; used
+     as text on white they measured yellow 1.44:1, success 3.40:1, warning
+     2.93:1, info 3.68:1 — i.e. accent numbers and labels were unreadable.
+     These darker steps are what the text utilities resolve to below, so no
+     fill changes. Measured on white / on the matching badge tint:
+     primary 7.06 / 6.81, success 8.07 / 7.35, warning 6.56, info 8.72 / 7.73,
+     danger 7.29 / 6.28. */
+  --nb-text-primary: #7A5000;
+  --nb-text-success: #0F5C34;
+  --nb-text-warning: #8A4F0A;
+  --nb-text-info: #1E40AF;
+  --nb-text-danger: #A81E28;
+
+  /* ---- Switch knob. The checked track is the yellow fill, which is light in
+     BOTH variants, so the checked knob is ink in both; only the unchecked
+     knob has to flip with the surface. */
+  --nb-switch-knob: var(--nb-ink);
+  --nb-switch-knob-on: var(--nb-ink);
+
   /* ---- Shadows: hard offset, zero blur. Depth is misregistration, not
           atmosphere — same token names the components already use. ---- */
   --shadow-soft: var(--nb-shadow-sm);
@@ -758,6 +777,18 @@ button:disabled,
   --color-text-main: #FFFDF5;
   --color-text-muted: #C9C4B4;
   --color-text-subtle: #A39E8E;
+
+  /* Text-safe accents, inverted for dark surfaces: yellow IS legible as text
+     here (it was not on white); the other three are lifted off their fills
+     (info measured 3.65:1 here, success/warning/danger were close calls). */
+  --nb-text-primary: var(--nb-yellow);
+  --nb-text-success: #7BDBA4;
+  --nb-text-warning: #EEB060;
+  --nb-text-info: #93B4FF;
+  --nb-text-danger: #FF9C9C;
+
+  --nb-switch-knob: #FFFDF5;
+  --nb-switch-knob-on: var(--nb-ink);
 
   --nb-shadow-sm: 3px 3px 0 0 #FFFDF5;
   --nb-shadow-md: 5px 5px 0 0 #FFFDF5;
@@ -863,13 +894,17 @@ button:disabled,
 [data-visual="neubrutalist"] .bg-warning {
   color: var(--nb-ink);
 }
-/* Same idea for the opacity variants (`bg-primary/90`), which the class list
-   above does not match because of the `/90` suffix. */
-[data-visual="neubrutalist"] [class*="bg-primary/"],
-[data-visual="neubrutalist"] [class*="bg-brand-5"],
-[data-visual="neubrutalist"] [class*="bg-brand-6"] {
-  color: var(--nb-ink);
-}
+/* NOTE: there is deliberately no ink rule for the translucent variants
+   (`bg-primary/10`, `bg-brand-500/5`). A previous rule named a single ink for
+   every `[class*="bg-primary/"]` match, which broke two ways:
+     1. It also matched *variant-prefixed* classes (`hover:bg-primary/5`), so
+        controls that only tint on hover got a permanent ink label.
+     2. A wash over white is near-white, but the same wash over the dark
+        surface is dark olive — one fixed ink cannot serve both, and it left
+        black on rgb(54,49,27) at 1.61:1 on 13 pages.
+   Those chips are legible through their own text utility instead
+   (`bg-primary/10 text-primary`), which the accent-text block below maps to a
+   readable step in each variant. Leave this rule out.
 
 /* A solid fill without an outline reads half-finished in this grammar — the
    black edge is what makes the fill look printed rather than washed. Height is
@@ -884,13 +919,118 @@ button:disabled,
   border: var(--nb-outline) solid var(--nb-ink);
 }
 
-/* Headings and the brand mark take the display face; body copy stays calm. */
+/* ---- Switch (`role="switch"`) --------------------------------------------
+   The generic rules above break the switch in three ways, because its own
+   parts collide with them: the checked track IS `.bg-brand-500` (so it took
+   the 3px outline) and the knob IS `.shadow-sm` (so it took the 3px hard
+   shadow). On the small size the track is 32x16, so a 3px stroke leaves a
+   10px content box for a 12px knob: the knob punched through the top/bottom
+   edge and, checked, sat on top of the right border. Measured on the live
+   page: track 32x16, border 3px, knob 12px, content 10px → 2px overflow.
+   2px is the largest stroke the knob still fits inside, and the knob's
+   `mt-0.5` is dropped because it was compensating for the default 0px border.
+   Geometry at 2px, all three sizes — knob fills the content box exactly and
+   the checked travel ends flush with the inner edge:
+     sm 32x16 -> content 28x12 vs 12px knob, travel 16px -> flush at 30px
+     md 44x24 -> content 40x20 vs 20px knob, travel 20px -> flush at 42px
+     lg 56x28 -> content 52x24 vs 24px knob, travel 28px -> flush at 54px
+   Square track and square knob: consistent with the rest of the theme, which
+   squares every other control. Declared after the outline rule so it wins on
+   source order at equal specificity. */
+[data-visual="neubrutalist"] [role="switch"] {
+  border: 2px solid var(--color-border);
+  border-radius: 0;
+  box-shadow: none;
+}
+[data-visual="neubrutalist"] [role="switch"] > span {
+  margin-top: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background-color: var(--nb-switch-knob);
+}
+[data-visual="neubrutalist"] [role="switch"][aria-checked="true"] > span {
+  background-color: var(--nb-switch-knob-on);
+}
+
+/* ---- Accent TEXT ---------------------------------------------------------
+   `text-primary` / `text-success` / … resolve to the FILL colours, which are
+   tuned to be fills and are far too light to read as text (see the text-safe
+   steps above for the measurements). The value flips per variant through the
+   token, so one rule serves both.
+   The Tailwind palette names the badge components use get the same treatment:
+   `text-green-600 dark:text-green-400` on `bg-green-500/10` measured 2.93:1
+   (green, 4 pages), `text-red-600` 4.11:1, `text-blue-500` 3.33:1,
+   `text-gray-500` 4.28:1 light / 3.08:1 dark. Matching on the substring also
+   catches the `dark:`-prefixed form, which is what those badges rely on.
+   Amber and yellow text is deliberately NOT mapped: in this app it only ever
+   sits on dark surfaces, where it already passes. */
+[data-visual="neubrutalist"] .text-primary { color: var(--nb-text-primary); }
+[data-visual="neubrutalist"] .text-success { color: var(--nb-text-success); }
+[data-visual="neubrutalist"] .text-warning { color: var(--nb-text-warning); }
+[data-visual="neubrutalist"] .text-info { color: var(--nb-text-info); }
+[data-visual="neubrutalist"] .text-danger { color: var(--nb-text-danger); }
+
+[data-visual="neubrutalist"] [class*="text-green-"] { color: var(--nb-text-success); }
+[data-visual="neubrutalist"] [class*="text-red-"] { color: var(--nb-text-danger); }
+[data-visual="neubrutalist"] [class*="text-blue-"] { color: var(--nb-text-info); }
+[data-visual="neubrutalist"] [class*="text-gray-"] { color: var(--color-text-muted); }
+/* The Badge component's `primary` variant is `bg-brand-500/10 text-brand-600
+   dark:text-brand-300` — a mid-amber label on a 10% amber wash, measured at
+   1.74:1 light ("START HERE") and 1.79:1 ("AWS Builder ID"). Same treatment. */
+[data-visual="neubrutalist"] [class*="text-brand-"] { color: var(--nb-text-primary); }
+
+/* De-emphasised labels (`text-text-muted/60`) measured 3.12:1 light and
+   4.33:1 dark — under AA in both, on 13 pages. The theme already carries a
+   subtler-but-legible step, so the alpha variants resolve to it. */
+[data-visual="neubrutalist"] [class*="text-text-muted/"],
+[data-visual="neubrutalist"] [class*="text-text-subtle/"] {
+  color: var(--color-text-subtle);
+}
+
+/* ---- Gradient CTAs -------------------------------------------------------
+   The one gradient button (`bg-linear-to-r from-indigo-500 to-purple-500`)
+   also carries `text-white!`, and that `!important` outranks the ink rule
+   above — so its label stayed white on a light fill. It is the only
+   `text-white!` in the source, so match the pair and leave the rest of the
+   gradients alone: the other six are gradient-ONLY (no background-color), and
+   clearing their image would erase the mark rather than restyle it. */
+/* This rule is wrapped in `@layer utilities` ON PURPOSE. Every other rule in
+   this block is unlayered, and for `!important` the cascade layer order is
+   INVERTED: an important declaration inside a layer beats one outside it, no
+   matter the specificity. Tailwind emits the utility as
+   `.text-white\!{color:var(--color-white)!important}` inside `@layer
+   utilities`, so an unlayered `!important` loses and the label stayed white
+   on the yellow fill (1.44:1). Inside the same layer both sit on
+   specificity, where (0,3,0) beats (0,1,0). */
+@layer utilities {
+  [data-visual="neubrutalist"] [class*="bg-linear-to"][class*="text-white!"],
+  [data-visual="neubrutalist"] [class*="bg-gradient-to"][class*="text-white!"] {
+    background-image: none;
+    color: var(--nb-ink) !important;
+  }
+}
+
+/* Headings and the brand mark take the display face; body copy stays calm.
+   Weight is viewport-aware because the same heading is set ~10px smaller on a
+   phone (the page title is `text-base lg:text-2xl`, so 16px at 390px wide).
+   Syne at 800 is a display weight: at that size it reads as a smeared blob,
+   and 59 elements on one page were rendering at 800. Small screens drop to
+   700 and relax the tracking; the desktop shout is unchanged. */
 [data-visual="neubrutalist"] h1,
 [data-visual="neubrutalist"] h2,
 [data-visual="neubrutalist"] h3 {
   font-family: var(--font-syne), 'Syne', system-ui, sans-serif;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+@media (min-width: 768px) {
+  [data-visual="neubrutalist"] h1,
+  [data-visual="neubrutalist"] h2,
+  [data-visual="neubrutalist"] h3 {
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
 }
 
 /* Body face. Setting `--font-sans` is NOT enough: unlike radius and shadow,

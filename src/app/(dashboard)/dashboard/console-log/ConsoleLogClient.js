@@ -4,18 +4,22 @@ import { useState, useEffect, useRef } from "react";
 import { Card, Button } from "@/shared/components";
 import { CONSOLE_LOG_CONFIG } from "@/shared/constants/config";
 
+// The -400 shades are tuned for a black panel (they measure 1.6-3.1:1 on a
+// light one, i.e. unreadable), so each level carries a -700 shade for the light
+// panel and keeps the -400 shade under `dark:`.
 const LOG_LEVEL_COLORS = {
-  LOG: "text-green-400",
-  INFO: "text-blue-400",
-  WARN: "text-yellow-400",
-  ERROR: "text-red-400",
-  DEBUG: "text-purple-400",
+  LOG: "text-green-700 dark:text-green-400",
+  INFO: "text-blue-700 dark:text-blue-400",
+  WARN: "text-amber-700 dark:text-amber-400",
+  ERROR: "text-red-700 dark:text-red-400",
+  DEBUG: "text-purple-700 dark:text-purple-400",
 };
+const DEFAULT_LOG_COLOR = "text-green-700 dark:text-green-400";
 
 function colorLine(line) {
   const match = line.match(/\[(\w+)\]/g);
   const levelTag = match ? match[1]?.replace(/\[|\]/g, "") : null;
-  const color = LOG_LEVEL_COLORS[levelTag] || "text-green-400";
+  const color = LOG_LEVEL_COLORS[levelTag] || DEFAULT_LOG_COLOR;
   return <span className={color}>{line}</span>;
 }
 
@@ -111,7 +115,7 @@ export default function ConsoleLogClient() {
           <div
             ref={logRef}
             onScroll={handleScroll}
-            className="bg-black rounded-b-lg p-4 text-xs font-mono h-[calc(100vh-220px)] overflow-y-auto"
+            className="bg-surface-2 border border-border-subtle rounded-lg p-4 text-xs font-mono h-[calc(100vh-220px)] overflow-y-auto dark:bg-black dark:border-transparent"
           >
             {logs.length === 0 ? (
               <span className="text-text-muted">No console logs yet.</span>
