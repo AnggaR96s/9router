@@ -629,3 +629,315 @@ button:disabled,
   border-top: 1px solid var(--color-border);
   margin: 1.5rem 0;
 }
+
+
+/* ============================================================
+   VISUAL THEME: NEUBRUTALIST  ([data-visual="neubrutalist"])
+
+   A theme LAYER over the existing structure, not a rewrite: the markup keeps
+   its conventional layout, this block swaps the visual grammar — square
+   corners, thick black outlines, hard offset shadows, flat high-contrast
+   color. Everything is scoped to [data-visual="neubrutalist"] so the default
+   look is untouched.
+
+   Two rules govern the whole block:
+   1. Override TOKENS where Tailwind v4 routes them through a variable
+      (--radius-*, --color-*, --tw-shadow). One declaration then moves every
+      consumer: `--radius-lg: 0` is what squares all 332 `rounded-lg` uses.
+   2. Override CLASSES only where the utility hardcodes a value
+      (`.rounded` -> .25rem, `.rounded-full` -> huge px, `.border` -> 1px).
+      Those need their own selector, escaped for Tailwind's `/` and `[]`.
+
+   Specificity: `[data-visual=x] .cls` (0,2,0) beats the plain utility (0,1,0),
+   and both live in the same @layer utilities, so no !important is needed —
+   except for the two arbitrary-value radius utilities, which are (0,1,0)
+   too but declared later; those are listed explicitly below.
+   ============================================================ */
+
+[data-visual="neubrutalist"] {
+  /* ---- Palette: structural black on off-white, saturated accents ---- */
+  --nb-ink: #000000;
+  --nb-paper: #FFFDF5;
+  --nb-yellow: #FFD23F;
+  --nb-coral: #FF6B6B;
+  --nb-sky: #74B9FF;
+  --nb-green: #88D498;
+  --nb-orange: #FFA552;
+  --nb-lavender: #B8A9FA;
+
+  --nb-outline: 3px;
+  --nb-shadow-sm: 3px 3px 0 0 var(--nb-ink);
+  --nb-shadow-md: 5px 5px 0 0 var(--nb-ink);
+  --nb-shadow-lg: 8px 8px 0 0 var(--nb-ink);
+
+  /* ---- Square everything: Tailwind v4 routes these through variables ---- */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-brand: 0px;
+  --radius-brand-lg: 0px;
+
+  /* ---- Surfaces: flat fills, no gradients ---- */
+  --color-bg: var(--nb-paper);
+  --color-bg-alt: #F5F1E4;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F5F1E4;
+  --color-surface-3: #E8E2D4;
+  --color-sidebar: #FFFFFF;
+
+  /* ---- Borders: the signature move — always full black, never tinted ---- */
+  --color-border: var(--nb-ink);
+  --color-border-subtle: var(--nb-ink);
+
+  --color-text: var(--nb-ink);
+  --color-text-main: var(--nb-ink);
+  --color-text-muted: #4A4A4A;
+  --color-text-subtle: #6B6B6B;
+
+  /* ---- Accents: neubrutalist palette, including the two hover steps the
+          brand scale is referenced with (bg-brand-500 hover:bg-brand-600) ---- */
+  --color-brand-50: #FFF9E0;
+  --color-brand-100: #FFEFB3;
+  --color-brand-200: #FFE480;
+  --color-brand-300: #FFDA5C;
+  --color-brand-400: #FFD23F;
+  --color-brand-500: var(--nb-yellow);
+  --color-brand-600: #E8B71F;
+  --color-brand-700: #C79A12;
+  --color-brand-800: #9C790D;
+  --color-brand-900: #6B5308;
+  --color-primary: var(--nb-yellow);
+  --color-primary-hover: #E8B71F;
+  --color-accent: var(--nb-coral);
+
+  /* ---- Status: flat, saturated, still WCAG-legible ---- */
+  --color-danger: #E5484D;
+  --color-success: #2F9E5E;
+  --color-warning: #D9822B;
+  --color-info: #2F6FED;
+
+  /* ---- Shadows: hard offset, zero blur. Depth is misregistration, not
+          atmosphere — same token names the components already use. ---- */
+  --shadow-soft: var(--nb-shadow-sm);
+  --shadow-warm: var(--nb-shadow-md);
+  --shadow-elevated: var(--nb-shadow-lg);
+  --shadow-elev: var(--nb-shadow-md);
+  --shadow-focus: 0 0 0 3px var(--nb-ink);
+
+  /* ---- Typography: assertive display, calm body ----
+     Kept for anything that reads the token directly, but note that Tailwind v4
+     hardcodes `.font-sans`'s stack, so the body face is actually switched by
+     the `.font-sans` override further down. */
+  --font-sans: var(--font-space-grotesk), 'Space Grotesk', system-ui, sans-serif;
+
+  color-scheme: light;
+}
+
+/* Dark variant of the same theme: ink/paper invert, accents stay loud.
+   Keeps the hard shadow readable by switching it to a light-on-dark offset. */
+[data-visual="neubrutalist"].dark {
+  --nb-ink: #000000;
+  --nb-paper: #14140F;
+
+  --color-bg: #14140F;
+  --color-bg-alt: #1C1C14;
+  --color-surface: #1F1F17;
+  --color-surface-2: #2A2A1F;
+  --color-surface-3: #35351F;
+  --color-sidebar: #1F1F17;
+
+  /* On dark the outline can no longer be pure black — it would vanish into
+     the surface. Off-white keeps the "stamped" edge and the offset visible. */
+  --color-border: #FFFDF5;
+  --color-border-subtle: #FFFDF5;
+
+  --color-text: #FFFDF5;
+  --color-text-main: #FFFDF5;
+  --color-text-muted: #C9C4B4;
+  --color-text-subtle: #A39E8E;
+
+  --nb-shadow-sm: 3px 3px 0 0 #FFFDF5;
+  --nb-shadow-md: 5px 5px 0 0 #FFFDF5;
+  --nb-shadow-lg: 8px 8px 0 0 #FFFDF5;
+
+  --shadow-focus: 0 0 0 3px var(--nb-coral);
+}
+
+/* ---- Class-level overrides: utilities that hardcode their value ---- */
+
+/* Sidebars/nav keep their structure but gain the outline. */
+[data-visual="neubrutalist"] .card-soft,
+[data-visual="neubrutalist"] .card-elev {
+  border-radius: 0;
+  border: var(--nb-outline) solid var(--color-border);
+  box-shadow: var(--nb-shadow-md);
+}
+
+/* `.rounded` hardcodes .25rem, and `.rounded-full` a huge px value, so the
+   radius tokens above cannot reach them. */
+[data-visual="neubrutalist"] .rounded {
+  border-radius: 0;
+}
+/* `.rounded-full` is used for two different things — geometric circles (53
+   sites: avatars, status dots, spinners, traffic lights, the toggle knob) and
+   pill labels/badges (50 sites). Squaring the former reads as broken; squaring
+   the latter is the point. Padding is what separates them, and it is a reliable
+   proxy: a pill always carries px-/py-, a circle always carries a fixed size.
+   Matching on `px-` is deliberate — matching `w-` would also hit pills, since
+   `max-w-[220px]` contains the substring `w-`. */
+[data-visual="neubrutalist"] .rounded-full[class*="px-"] {
+  border-radius: 0;
+}
+/* Arbitrary radius values (.rounded-[14px] and friends) — declared as literal
+   length, so override them by matching the same shapes. */
+[data-visual="neubrutalist"] [class*="rounded-["] {
+  border-radius: 0;
+}
+
+/* `.border` hardcodes 1px, so thicken it. `border-b` / `border-t` / `border-r`
+   stay 1px on purpose: they are dividers (table rows, section rules), where a
+   3px stroke reads as a bug rather than a style. */
+[data-visual="neubrutalist"] .border {
+  border-width: var(--nb-outline);
+}
+[data-visual="neubrutalist"] .border-2 {
+  border-width: var(--nb-outline);
+}
+
+/* Tailwind v4 sets `--tw-shadow` per shadow utility, so the token overrides
+   above are not enough: the utility wins. Re-express the tiers as hard
+   offsets so shadow-sm/md/lg/xl/2xl all land on the three-tier system. */
+[data-visual="neubrutalist"] .shadow-sm,
+[data-visual="neubrutalist"] .shadow {
+  --tw-shadow: var(--nb-shadow-sm);
+}
+[data-visual="neubrutalist"] .shadow-md,
+[data-visual="neubrutalist"] .shadow-lg {
+  --tw-shadow: var(--nb-shadow-md);
+}
+[data-visual="neubrutalist"] .shadow-xl,
+[data-visual="neubrutalist"] .shadow-2xl {
+  --tw-shadow: var(--nb-shadow-lg);
+}
+
+/* Buttons: press = translate into the shadow and kill it. This is the
+   interaction signature of the style — the element moves, not just fades. */
+[data-visual="neubrutalist"] button:not(:disabled):active,
+[data-visual="neubrutalist"] [role="button"]:not([aria-disabled="true"]):active {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+
+/* Solid accent fills must carry INK, not white.
+   The light palette is the whole point of this style (`bg-primary text-white`
+   appears 38 times, plus bg-brand-*, bg-amber-*, bg-blue-*, bg-green-*), but
+   white on these fills measures 1.44:1 on yellow, 2.78:1 on coral, 2.07:1 on
+   sky — far under WCAG AA's 4.5:1, i.e. genuinely unreadable, not just off.
+   Black on the same fills measures 14.5:1 / 7.6:1 / 10.1:1. So in this theme
+   the fill keeps its colour and the label flips to ink. `[data-visual=x] .cls`
+   (0,2,0) outranks the plain `.text-white` utility (0,1,0), so no !important.
+   Dark surfaces (bg-neutral-900, bg-gray-900, ...) are deliberately NOT in
+   this list: white on those is the correct pairing and stays. */
+[data-visual="neubrutalist"] .bg-primary,
+[data-visual="neubrutalist"] .bg-primary-hover,
+[data-visual="neubrutalist"] .bg-brand-50,
+[data-visual="neubrutalist"] .bg-brand-100,
+[data-visual="neubrutalist"] .bg-brand-200,
+[data-visual="neubrutalist"] .bg-brand-300,
+[data-visual="neubrutalist"] .bg-brand-400,
+[data-visual="neubrutalist"] .bg-brand-500,
+[data-visual="neubrutalist"] .bg-brand-600,
+[data-visual="neubrutalist"] .bg-amber-500,
+[data-visual="neubrutalist"] .bg-amber-600,
+[data-visual="neubrutalist"] .bg-blue-500,
+[data-visual="neubrutalist"] .bg-blue-600,
+[data-visual="neubrutalist"] .bg-green-600,
+[data-visual="neubrutalist"] .bg-green-700,
+[data-visual="neubrutalist"] .bg-red-500,
+[data-visual="neubrutalist"] .bg-red-600,
+[data-visual="neubrutalist"] .bg-danger,
+[data-visual="neubrutalist"] .bg-success,
+[data-visual="neubrutalist"] .bg-warning {
+  color: var(--nb-ink);
+}
+/* Same idea for the opacity variants (`bg-primary/90`), which the class list
+   above does not match because of the `/90` suffix. */
+[data-visual="neubrutalist"] [class*="bg-primary/"],
+[data-visual="neubrutalist"] [class*="bg-brand-5"],
+[data-visual="neubrutalist"] [class*="bg-brand-6"] {
+  color: var(--nb-ink);
+}
+
+/* A solid fill without an outline reads half-finished in this grammar — the
+   black edge is what makes the fill look printed rather than washed. Height is
+   safe here: Tailwind is border-box, so the box does not grow. */
+[data-visual="neubrutalist"] .bg-primary,
+[data-visual="neubrutalist"] .bg-brand-500,
+[data-visual="neubrutalist"] .bg-brand-600,
+[data-visual="neubrutalist"] .bg-red-500,
+[data-visual="neubrutalist"] .bg-red-600,
+[data-visual="neubrutalist"] .bg-green-600,
+[data-visual="neubrutalist"] .bg-green-700 {
+  border: var(--nb-outline) solid var(--nb-ink);
+}
+
+/* Headings and the brand mark take the display face; body copy stays calm. */
+[data-visual="neubrutalist"] h1,
+[data-visual="neubrutalist"] h2,
+[data-visual="neubrutalist"] h3 {
+  font-family: var(--font-syne), 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* Body face. Setting `--font-sans` is NOT enough: unlike radius and shadow,
+   Tailwind v4 hardcodes the font stack in the utility itself —
+   `.font-sans{font-family:Inter,...}` — so the token is never read. Override
+   the utility. `<body>` carries `.font-sans` (see app/layout.js), which is how
+   the whole page inherits it; one rule moves all body copy. */
+[data-visual="neubrutalist"].font-sans,
+[data-visual="neubrutalist"] .font-sans,
+[data-visual="neubrutalist"] body {
+  font-family: var(--font-space-grotesk), 'Space Grotesk', system-ui, sans-serif;
+}
+
+/* Monospace slots (IDs, keys, URLs) use the style's mono face. */
+[data-visual="neubrutalist"] .font-mono,
+[data-visual="neubrutalist"] code,
+[data-visual="neubrutalist"] pre {
+  font-family: var(--font-space-mono), 'Space Mono', ui-monospace, monospace;
+}
+
+/* Selects/inputs get the same outline so form controls don't read as a
+   different design system than the cards around them. */
+[data-visual="neubrutalist"] input:not([type="checkbox"]):not([type="radio"]),
+[data-visual="neubrutalist"] textarea,
+[data-visual="neubrutalist"] select {
+  border-color: var(--color-border);
+  border-width: 2px;
+}
+
+/* Kill the decorative atmosphere: gradients and blurred glow blobs are the
+   opposite of this grammar (flat fills, visible structure). */
+[data-visual="neubrutalist"] .bg-hero-gradient {
+  background: var(--color-bg-alt);
+}
+[data-visual="neubrutalist"] .blur-\[100px\],
+[data-visual="neubrutalist"] .blur-\[120px\],
+[data-visual="neubrutalist"] .blur-\[130px\] {
+  display: none;
+}
+[data-visual="neubrutalist"] .bg-vibrancy {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: var(--color-surface);
+}
+
+/* Transition discipline: the style is emphatic, not jittery. Keep color/bg
+   transitions, drop the slow multi-property ones that blur the press move. */
+[data-visual="neubrutalist"] * {
+  transition-duration: 120ms;
+}

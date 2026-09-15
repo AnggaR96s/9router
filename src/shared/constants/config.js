@@ -32,10 +32,33 @@ export const UPDATER_CONFIG = {
 };
 
 // Theme configuration
+// Two axes: `theme` is the dark/light variant (the `dark` class), and
+// `visualTheme` is the full visual language applied via [data-visual] on <html>.
 export const THEME_CONFIG = {
   storageKey: "theme",
   defaultTheme: "system", // "light" | "dark" | "system"
+  defaultVisualTheme: "default",
 };
+
+// Visual themes are pure CSS token sets — adding one means adding a
+// [data-visual="<id>"] block in globals.css plus an entry here. The "default"
+// entry is not a block: it means "no attribute", i.e. today's look.
+// `swatch` is exactly 4 colours — the picker renders them as a 2x2 grid, so a
+// 3-colour swatch would leave a hole.
+export const VISUAL_THEMES = [
+  {
+    id: "default",
+    label: "Default",
+    hint: "Soft surfaces, rounded, warm brand orange",
+    swatch: ["#E56A4A", "#1a1a1a", "#FDFAF6", "#E8E0D6"],
+  },
+  {
+    id: "neubrutalist",
+    label: "Neubrutalist",
+    hint: "Thick black borders, square corners, hard offset shadows",
+    swatch: ["#FFD23F", "#FF6B6B", "#74B9FF", "#000000"],
+  },
+];
 
 // Subscription
 export const SUBSCRIPTION_CONFIG = {

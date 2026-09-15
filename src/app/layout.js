@@ -1,4 +1,4 @@
-import { Inter } from "next/font/google";
+import { Inter, Syne, Space_Grotesk, Space_Mono } from "next/font/google";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import "material-symbols/outlined.css";
 import "./globals.css";
@@ -14,6 +14,17 @@ initConsoleLogCapture();
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+});
+
+// Neubrutalist typefaces. Loaded unconditionally (small, and next/font inlines
+// them into the build) so switching the visual theme needs no network at
+// runtime; they are only *used* inside the [data-visual="neubrutalist"] block.
+const syne = Syne({ subsets: ["latin"], variable: "--font-syne" });
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
+const spaceMono = Space_Mono({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  variable: "--font-space-mono",
 });
 
 export const metadata = {
@@ -34,10 +45,11 @@ export default function RootLayout({ children }) {
       <head>
         {/* Apply persisted theme before first paint so a reload does not flash the
             default (light) theme before the client store hydrates. Mirrors the
-            zustand-persist "theme" key and the `dark` class applyTheme() sets. */}
+            zustand-persist "theme" key, the `dark` class applyTheme() sets, and
+            the data-visual attribute the visual-theme axis sets. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem('theme');var t=s?(JSON.parse(s).state||{}).theme:'system';t=t||'system';var m=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(t==='system'&&m)){document.documentElement.classList.add('dark')}}catch(e){}})();`,
+            __html: `(function(){try{var s=localStorage.getItem('theme');var st=s?(JSON.parse(s).state||{}):{};var t=st.theme||'system';var m=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(t==='system'&&m)){document.documentElement.classList.add('dark')}var v=st.visualTheme;if(v&&v!=='default'){document.documentElement.setAttribute('data-visual',v)}}catch(e){}})();`,
           }}
         />
         <script
@@ -46,7 +58,7 @@ export default function RootLayout({ children }) {
           }}
         />
       </head>
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} ${syne.variable} ${spaceGrotesk.variable} ${spaceMono.variable} font-sans antialiased`}>
         <ThemeProvider>
           <RuntimeI18nProvider>
             {children}

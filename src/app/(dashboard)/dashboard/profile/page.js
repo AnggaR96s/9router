@@ -6,7 +6,7 @@ import Modal, { ConfirmModal } from "@/shared/components/Modal";
 import LanguageSwitcher from "@/shared/components/LanguageSwitcher";
 import { useTheme } from "@/shared/hooks/useTheme";
 import { cn } from "@/shared/utils/cn";
-import { APP_CONFIG } from "@/shared/constants/config";
+import { APP_CONFIG, VISUAL_THEMES } from "@/shared/constants/config";
 import { LOCALE_COOKIE, normalizeLocale } from "@/i18n/config";
 import { LOCALE_FLAGS } from "@/shared/constants/locales";
 
@@ -20,7 +20,7 @@ function getLocaleFromCookie() {
 }
 
 export default function ProfilePage() {
-  const { theme, setTheme, isDark } = useTheme();
+  const { theme, setTheme, isDark, visualTheme, setVisualTheme } = useTheme();
   const [locale, setLocale] = useState(() => getLocaleFromCookie());
   const [langOpen, setLangOpen] = useState(false);
   const [shutdownOpen, setShutdownOpen] = useState(false);
@@ -797,6 +797,55 @@ export default function ProfilePage() {
                   <span className="capitalize text-xs sm:text-sm">{option}</span>
                 </button>
               ))}
+            </div>
+          </div>
+          {/* Visual theme: a second, independent axis from light/dark. Rendered
+              as swatches rather than a segmented control because the choice is
+              a look, not a binary — the swatch IS the preview. */}
+          <div className="flex flex-col gap-3 pt-4 mt-4 border-t border-border">
+            <div>
+              <p className="font-medium text-sm sm:text-base">Visual theme</p>
+              <p className="text-xs sm:text-sm text-text-muted">
+                Shape, borders, shadows and palette. Independent of light/dark above.
+              </p>
+            </div>
+            <div role="group" aria-label="Visual theme" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {VISUAL_THEMES.map((option) => {
+                const active = visualTheme === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setVisualTheme(option.id)}
+                    className={cn(
+                      "flex items-center gap-3 p-3 rounded-lg border text-left transition-all",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                      active
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/40 hover:bg-surface-2"
+                    )}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="size-9 shrink-0 rounded-md border border-border overflow-hidden grid grid-cols-2"
+                    >
+                      {option.swatch.slice(0, 4).map((color, i) => (
+                        <span key={i} style={{ backgroundColor: color }} />
+                      ))}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-2">
+                        <span className="font-medium text-sm">{option.label}</span>
+                        {active && (
+                          <span className="material-symbols-outlined text-[16px] text-primary">check</span>
+                        )}
+                      </span>
+                      <span className="block text-xs text-text-muted">{option.hint}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
           <div className="flex flex-col gap-3 pt-4 border-t border-border">
