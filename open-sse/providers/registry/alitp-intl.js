@@ -21,6 +21,7 @@ export default {
   category: "apikey",
   transport: {
     baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions",
+    validateUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/models",
     headers: {},
     quirks: { preserveCacheControl: true },
   },

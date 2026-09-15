@@ -18,6 +18,7 @@ export default {
   transport: {
     baseUrl:
       "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+    validateUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models",
     headers: {},
     quirks: { preserveCacheControl: true },
   },

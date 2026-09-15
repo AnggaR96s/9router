@@ -11,6 +11,7 @@ export default {
   category: "apikey",
   transport: {
     baseUrl: "https://api.xiaomimimo.com/api/free-ai/openai/chat",
+    validateUrl: "https://api.xiaomimimo.com/v1/models",
     noAuth: true,
   },
   models: [

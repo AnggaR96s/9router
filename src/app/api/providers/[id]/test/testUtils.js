@@ -606,7 +606,93 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
   }
 
   try {
-    switch (connection.provider) {
+        const SEARCH_FETCH_PROBES = {
+        "brave-search": {
+          url: "https://api.search.brave.com/res/v1/web/search?q=test",
+          method: "GET", header: "x-subscription-token",
+        },
+        "exa": {
+          url: "https://api.exa.ai/search",
+          method: "POST", header: "x-api-key", rawKey: true,
+          body: { query: "test", numResults: 1 },
+        },
+        "firecrawl": {
+          url: "https://api.firecrawl.dev/v1/scrape",
+          method: "POST", header: "Authorization",
+          body: { url: "https://example.com", formats: ["markdown"] },
+        },
+        "google-pse": {
+          url: "https://www.googleapis.com/customsearch/v1?q=test&cx=test",
+          method: "GET", header: "key", rawKey: true,
+        },
+        "linkup": {
+          url: "https://api.linkup.so/v1/search",
+          method: "POST", header: "Authorization",
+          body: { query: "test" },
+        },
+        "searchapi": {
+          url: "https://www.searchapi.io/api/v1/search?engine=google&q=test",
+          method: "GET", header: "api_key", rawKey: true,
+        },
+        "serper": {
+          url: "https://google.serper.dev",
+          method: "POST", header: "x-api-key", rawKey: true,
+          body: { q: "test" },
+        },
+        "tavily": {
+          url: "https://api.tavily.com/search",
+          method: "POST", header: "Authorization",
+          body: { query: "test" },
+        },
+        "youcom": {
+          url: "https://ydc-index.io/v1/search?query=test",
+          method: "GET", header: "x-api-key", rawKey: true,
+        },
+        "xquik": {
+          url: "https://xquik.com/api/v1/credits",
+          method: "GET", header: "x-api-key", rawKey: true,
+        },
+        "commandcode": {
+          // No /models endpoint exists; the generate endpoint itself is the auth
+          // gate (verified live: 401 without a key). An empty body is rejected with
+          // 400 only after the key is read, so a valid key still answers 400 while a
+          // bad one answers 401 — which is exactly the distinction we want.
+          url: "https://api.commandcode.ai/alpha/generate",
+          method: "POST", header: "Authorization",
+          body: {},
+        },
+        "vertex-partner": {
+          // GCP service-account key, not an API key: there is no /models endpoint to
+          // probe and the baseUrl root answers 404 HTML for anonymous calls. The
+          // publishers list is the read-free call that inspects the credential.
+          url: "https://aiplatform.googleapis.com/v1/publishers",
+          method: "GET", header: "Authorization",
+        },
+      };
+      const searchFetchProbe = SEARCH_FETCH_PROBES[connection.provider];
+      if (searchFetchProbe) {
+        const res = await fetchWithConnectionProxy(searchFetchProbe.url, {
+          method: searchFetchProbe.method,
+          headers: {
+            "Content-Type": "application/json",
+            [searchFetchProbe.header]: searchFetchProbe.rawKey
+              ? connection.apiKey
+              : `Bearer ${connection.apiKey}`,
+          },
+          ...(searchFetchProbe.body
+            ? { body: JSON.stringify(searchFetchProbe.body) }
+            : {}),
+        }, effectiveProxy);
+        // 401/403/422 = key refused. Anything else (200, 400, 429, 5xx) means the
+        // endpoint answered and the key was not rejected, which is all this probe
+        // can establish.
+        if ([401, 403, 422].includes(res.status)) {
+          return { valid: false, error: "Invalid API key" };
+        }
+        return { valid: true, error: null };
+      }
+
+  switch (connection.provider) {
       case "cloudflare-ai": {
         const psd = connection.providerSpecificData || {};
         const accountId = psd.accountId;
@@ -794,6 +880,16 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
         const res = await fetch(`${host}/api/tags`);
         return { valid: res.ok, error: res.ok ? null : `Ollama not reachable at ${host}` };
       }
+      // Search/fetch providers have no /v1/models endpoint to probe — their API is
+      // scrape/search/extract, so the probe is a minimal read-free call against the
+      // service's own search or fetch endpoint. Verified live for every entry: an
+      // anonymous request and a bogus key are both refused (401/403/422), so a 200
+      // really means the key was read and accepted.
+      //
+      // `header` is the auth header the provider's own config declares
+      // (searchConfig/fetchConfig.authHeader) — not always Authorization.
+      // `rawKey` sends the key verbatim for providers whose header is not a bearer
+      // scheme (x-api-key / key / api_key).
       case "ollama-search": {
         // Not /api/tags: that list is served publicly, so a garbage key still answers 200
         // and the connection would be reported healthy without the key ever being read
