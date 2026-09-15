@@ -81,6 +81,13 @@ const getPageInfo = (pathname) => {
       icon: "layers",
       breadcrumbs: [],
     };
+  if (pathname.includes("/arena"))
+    return {
+      title: "Model Arena",
+      description: "Compare the speed, cost, and quality of two models side-by-side.",
+      icon: "swords",
+      breadcrumbs: [],
+    };
   if (pathname.includes("/usage"))
     return {
       title: "Usage & Analytics",
@@ -115,6 +122,13 @@ const getPageInfo = (pathname) => {
       title: "Token Saver",
       description: "Compress prompts and outputs to save tokens",
       icon: "savings",
+      breadcrumbs: [],
+    };
+  if (pathname.includes("/addons"))
+    return {
+      title: "Add-on Skills",
+      description: "Inject behavior rules into every routed request",
+      icon: "auto_fix_high",
       breadcrumbs: [],
     };
   if (pathname.includes("/cli-tools"))
@@ -164,6 +178,13 @@ const getPageInfo = (pathname) => {
       title: "Console Log",
       description: "Live server console output",
       icon: "monitor",
+      breadcrumbs: [],
+    };
+  if (pathname.includes("/error-log"))
+    return {
+      title: "Error Log",
+      description: "Inspect failed provider requests and their error details",
+      icon: "error",
       breadcrumbs: [],
     };
   if (pathname === "/dashboard")

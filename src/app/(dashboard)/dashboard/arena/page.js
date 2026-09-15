@@ -113,16 +113,6 @@ function ArenaContent() {
 
   return (
     <div className="flex flex-col gap-6 px-1 sm:px-0">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <span className="material-symbols-outlined text-primary">swords</span>
-          Model Arena
-        </h1>
-        <p className="text-sm text-text-muted">
-          Compare the speed, cost, and quality of two models side-by-side.
-        </p>
-      </div>
-
       <Card padding="md">
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -142,6 +132,7 @@ function ArenaContent() {
                   />
                   <Button
                     variant="secondary"
+                    size="stretch"
                     icon="search"
                     onClick={() => setShowModelPicker(index)}
                   />

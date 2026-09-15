@@ -15,6 +15,10 @@ const sizes = {
   sm: "h-7 px-3 text-xs rounded-[8px]",
   md: "h-9 px-4 text-sm rounded-[10px]",
   lg: "h-11 px-6 text-sm rounded-[10px]",
+  // No fixed height: the button stretches to the row's height, so it stays
+  // exactly as tall as a sibling Input (whose height varies per theme because
+  // the look overrides its border width — 42px default vs 44px neubrutalist).
+  stretch: "h-auto px-4 text-sm rounded-[10px]",
 };
 
 export default function Button({
