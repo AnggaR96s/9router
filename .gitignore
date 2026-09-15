@@ -18,6 +18,9 @@
 /.next-cli-build/
 /out/
 cli/.build-home/
+# CLI build output — packed into the npm tarball at publish time by
+# cli/scripts/build-cli.js, never committed (63 MB of build artifacts).
+cli/app/
 product
 # production
 /build

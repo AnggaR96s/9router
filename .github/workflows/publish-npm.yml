@@ -1,0 +1,84 @@
+name: Publish to npm
+
+# Publishes cli/ (package `nggrouter`) to the npm registry using trusted
+# publishing (OIDC) — no NPM_TOKEN secret, no long-lived credential.
+#
+# Requires a Trusted Publisher on npmjs.com for this package:
+#   Organization or user : AnggaR96s
+#   Repository           : 9router
+#   Workflow filename    : publish-npm.yml
+#   Allowed actions      : npm publish
+#
+# npm CLI >= 11.5.1 is required for OIDC (Node 24 ships it).
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build only, skip npm publish"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write # required for OIDC
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false # never cache in release builds
+
+      - name: Report toolchain
+        run: |
+          node --version
+          npm --version
+
+      # Guard: the tag must match the version in cli/package.json, otherwise a
+      # mistyped tag would publish a version nobody asked for.
+      - name: Verify tag matches cli/package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./cli/package.json').version")
+          echo "tag=$TAG package=$PKG"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag v$TAG does not match cli/package.json version $PKG"
+            exit 1
+          fi
+
+      # Lockfiles are not tracked in this repo, so `npm ci` cannot be used.
+      - name: Install root dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build dashboard + gateway (standalone)
+        run: npm run build
+
+      - name: Install cli dependencies
+        run: npm install --no-audit --no-fund
+        working-directory: cli
+
+      # `npm publish` in cli/ runs prepublishOnly -> npm run build, which packs
+      # .next/standalone into cli/app. So the bundle is built by npm itself.
+      - name: Publish to npm via OIDC
+        if: ${{ !inputs.dry_run }}
+        run: npm publish
+        working-directory: cli
+
+      - name: Pack tarball summary
+        run: |
+          echo "### Published package" >> "$GITHUB_STEP_SUMMARY"
+          node -p "'name: ' + require('./cli/package.json').name + '  version: ' + require('./cli/package.json').version" >> "$GITHUB_STEP_SUMMARY"
+          du -sh cli/app >> "$GITHUB_STEP_SUMMARY"
