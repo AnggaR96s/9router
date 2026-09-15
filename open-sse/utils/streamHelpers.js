@@ -38,8 +38,18 @@ export function hasValuableContent(chunk, format) {
   // OpenAI format
   if (format === FORMATS.OPENAI && chunk.choices?.[0]?.delta) {
     const delta = chunk.choices[0].delta;
+    // Reasoning can arrive under three different keys depending on the upstream:
+    // `reasoning_content` (GLM, Qwen, DeepSeek, Kimi), bare `reasoning` (Cline and
+    // other compat layers), and `reasoning_details[]` (MiniMax reasoning_split).
+    // All three are real output. Missing any of them here does not merely mislabel
+    // the chunk — the caller drops it outright (stream.js filters on this
+    // predicate), so the client never sees the model's thinking at all. Bare
+    // `reasoning` from a Cline client was exactly the reported defect (issue #4082);
+    // `reasoning_details` was dropped by the same gap.
     return delta.content && delta.content !== "" ||
            delta.reasoning_content && delta.reasoning_content !== "" ||
+           delta.reasoning && delta.reasoning !== "" ||
+           delta.reasoning_details && delta.reasoning_details.length > 0 ||
            delta.tool_calls && delta.tool_calls.length > 0 ||
            chunk.choices[0].finish_reason ||
            delta.role;

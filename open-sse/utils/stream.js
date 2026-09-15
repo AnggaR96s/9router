@@ -3,6 +3,7 @@ import { FORMATS } from "../translator/formats.js";
 import { trackPendingRequest, appendRequestLog } from "@/lib/usageDb.js";
 import { extractUsage, mergeUsage, hasValidUsage, estimateUsage, logUsage, addBufferToUsage, filterUsageForFormat, COLORS } from "./usageTracking.js";
 import { parseSSELine, hasValuableContent, fixInvalidId, formatSSE } from "./streamHelpers.js";
+import { extractReasoningText } from "../translator/concerns/reasoning.js";
 import { getOpenAIResponsesEventName, isOpenAIResponsesTerminalEvent, formatIncompleteOpenAIResponsesStreamFailure } from "./responsesStreamHelpers.js";
 import { dbg, isDebugEnabled } from "./debugLog.js";
 
@@ -188,7 +189,13 @@ export function createSSEStream(options = {}) {
 
               const delta = parsed.choices?.[0]?.delta;
               const content = delta?.content;
-              const reasoning = delta?.reasoning_content;
+              // Use the shared extractor rather than reading `reasoning_content`
+              // directly: it also covers bare `reasoning` (Cline) and
+              // `reasoning_details[]` (MiniMax). Reading only one key here meant
+              // those chunks contributed nothing to the totals even once the
+              // filter above stopped dropping them, so a stream whose only output
+              // was reasoning reported ~0 completion tokens.
+              const reasoning = extractReasoningText(delta);
               if (content && typeof content === "string") {
                 totalContentLength += content.length;
                 accumulatedContent += content;
@@ -313,10 +320,15 @@ export function createSSEStream(options = {}) {
           totalContentLength += parsed.choices[0].delta.content.length;
           accumulatedContent += parsed.choices[0].delta.content;
         }
-        // OpenAI format - reasoning
-        if (parsed.choices?.[0]?.delta?.reasoning_content) {
-          totalContentLength += parsed.choices[0].delta.reasoning_content.length;
-          accumulatedThinking += parsed.choices[0].delta.reasoning_content;
+        // OpenAI format - reasoning. Uses the shared extractor so bare
+        // `reasoning` (Cline) and `reasoning_details[]` (MiniMax) are counted
+        // alongside `reasoning_content` (GLM/Qwen/DeepSeek).
+        if (parsed.choices?.[0]?.delta) {
+          const reasoningText = extractReasoningText(parsed.choices[0].delta);
+          if (reasoningText) {
+            totalContentLength += reasoningText.length;
+            accumulatedThinking += reasoningText;
+          }
         }
         
         // Gemini format

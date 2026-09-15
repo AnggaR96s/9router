@@ -5,6 +5,10 @@ import { FORMATS } from "../../translator/formats.js";
 import { PROVIDERS } from "../../config/providers.js";
 import { buildRequestDetail, extractRequestConfig, saveUsageStats, formatDoneLine } from "./requestDetail.js";
 import { ROLE, RESPONSES_ITEM } from "../../translator/schema/index.js";
+// Shared reasoning reader: covers `reasoning_content`, bare `reasoning` (Cline)
+// and `reasoning_details[]` (MiniMax). Reading only `reasoning_content` here
+// silently dropped the other two shapes for JSON (non-streaming-client) calls.
+import { extractReasoningText } from "../../translator/concerns/reasoning.js";
 
 // Responses-API providers (e.g. codex) may emit SSE without content-type + use Responses output shape
 const isResponsesProvider = (p) => PROVIDERS[p]?.format === FORMATS.OPENAI_RESPONSES;
@@ -140,7 +144,10 @@ export function parseSSEToOpenAIResponse(rawSSE, fallbackModel) {
     const choice = chunk?.choices?.[0];
     const delta = choice?.delta || {};
     if (typeof delta.content === "string" && delta.content.length > 0) contentParts.push(delta.content);
-    if (typeof delta.reasoning_content === "string" && delta.reasoning_content.length > 0) reasoningParts.push(delta.reasoning_content);
+    // Shared extractor so bare `reasoning` / `reasoning_details[]` are not lost
+    // when a JSON client (non-streaming) requests a thinking model.
+    const deltaReasoning = extractReasoningText(delta);
+    if (deltaReasoning) reasoningParts.push(deltaReasoning);
     if (choice?.finish_reason) finishReason = choice.finish_reason;
     if (chunk?.usage && typeof chunk.usage === "object") usage = chunk.usage;
 
