@@ -11,7 +11,24 @@ import { openaiToKiroRequest } from "../../open-sse/translator/request/openai-to
 
 const contentOf = (result) =>
   result.conversationState.currentMessage.userInputMessage.content;
-const systemPromptOf = (result) => result.systemPrompt || "";
+// The wire payload carries no top-level `systemPrompt` any more: Kiro answers
+// any body carrying it with 400 REQUEST_BODY_INVALID (see
+// claude-to-kiro.js/openai-to-kiro.js and kiro-request-body-invalid.test.js).
+// The prompt text — thinking tags, agentic protocol, current-time context —
+// travels inside the first user turn's content (contentPrefix), which the
+// session replay folds into the frozen msg0. For a first turn that is the
+// currentMessage; on a later turn of a session it stays in history[0].
+const systemPromptOf = (result) => {
+  const conversationState = result?.conversationState;
+  const firstUserTurn = (conversationState?.history || []).find(
+    (turn) => turn?.userInputMessage
+  );
+  return (
+    firstUserTurn?.userInputMessage?.content ||
+    conversationState?.currentMessage?.userInputMessage?.content ||
+    ""
+  );
+};
 
 describe("openaiToKiroRequest", () => {
   describe("basic message conversion", () => {
@@ -568,22 +585,34 @@ describe("openaiToKiroRequest", () => {
       expect(systemPromptOf(result)).toContain("<max_thinking_length>16000</max_thinking_length>");
     });
 
-    it("keeps top-level systemPrompt stable across turns", () => {
+    it("freezes msg0 across turns while the current turn's time stays fresh", () => {
+      const credentials = {
+        connectionId: "kiro-account-openai-stable-prefix",
+        rawHeaders: { "x-session-id": "hermes-session-openai-stable-prefix" },
+      };
       const first = openaiToKiroRequest(
         "claude-sonnet-4.6-thinking",
         { messages: [{ role: "user", content: "first" }] },
         true,
-        {}
+        credentials
       );
       const second = openaiToKiroRequest(
         "claude-sonnet-4.6-thinking",
         { messages: [{ role: "user", content: "second" }] },
         true,
-        {}
+        credentials
       );
 
-      expect(first.systemPrompt).toBe(second.systemPrompt);
-      expect(first.systemPrompt).not.toContain("Current time");
+      const frozenMsg0 = second.conversationState.history[0].userInputMessage.content;
+      // The thinking prefix is delivered once, in the frozen session-start turn,
+      // and msg0 is replayed byte-identically instead of being rewritten with
+      // the new turn's content.
+      expect(frozenMsg0).toContain("<max_thinking_length>16000</max_thinking_length>");
+      expect(frozenMsg0).toContain("first");
+      expect(frozenMsg0).not.toContain("second");
+      expect(frozenMsg0).toBe(first.conversationState.currentMessage.userInputMessage.content);
+      // ...and never re-sent on the wire as a top-level field.
+      expect(second.systemPrompt).toBeUndefined();
       expect(first.conversationState.currentMessage.userInputMessage.content).toContain("Current time");
     });
 

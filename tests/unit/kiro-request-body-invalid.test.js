@@ -20,11 +20,14 @@ import { KiroExecutor } from "../../open-sse/executors/kiro.js";
  *    through `contentPrefix`, which applyKiroSessionReplay folds into the
  *    session-start user message.
  *
- * 2. Region rewriting. The registry baseUrls are hardcoded us-east-1, and the
- *    old code regionalized them by substituting the region into each
- *    *.amazonaws.com host — producing `codewhisperer.<region>.amazonaws.com`,
- *    which does not resolve outside us-east-1. An IAM Identity Center account
- *    homed elsewhere must use the regional Amazon Q host instead.
+ * 2. Region rewriting. The registry baseUrls are hardcoded us-east-1, so an
+ *    account homed elsewhere must be pointed at the regional hosts. The current
+ *    contract (see getOrderedBaseUrls) regionalizes every *.amazonaws.com
+ *    surface and puts the regional Amazon Q host `q.<region>.amazonaws.com`
+ *    first: the deprecated kiro.dev path gateway answers valid modern payloads
+ *    with a terminal 400 REQUEST_BODY_INVALID, while a foreign region on an
+ *    Amazon surface fails with 401/403, which DO fall through to the next
+ *    surface.
  */
 const CREDENTIALS = {
   providerSpecificData: {
@@ -89,12 +92,20 @@ describe("Kiro payload omits the top-level systemPrompt (REQUEST_BODY_INVALID)",
   });
 
   it("keeps the fields CodeWhisperer does accept", () => {
-    const payload = openaiToKiroRequest("claude-sonnet-4.5", openaiBody(), true, CREDENTIALS);
+    const credentials = {
+      ...CREDENTIALS,
+      connectionId: "kiro-account-body-invalid",
+      rawHeaders: { "x-session-id": "hermes-session-body-invalid" },
+    };
+    const payload = openaiToKiroRequest("claude-sonnet-4.5", openaiBody(), true, credentials);
 
-    // agentContinuationId is what lets Kiro reuse an agent session across turns;
-    // dropping it makes every turn look like a fresh conversation and re-bills
-    // the whole history, so guard it here.
-    expect(payload.conversationState.agentContinuationId).toBeTruthy();
+    // conversationId is what lets Kiro reuse an agent session across turns
+    // (the upstream agentContinuationId field is intentionally gone from the
+    // wire shape — see kiro-minimal-wire-payload.test.js); dropping it makes
+    // every turn look like a fresh conversation and re-bills the whole
+    // history, so guard the session identity here, exactly as resolved.
+    expect(payload.conversationState.conversationId).toBe("hermes-session-body-invalid");
+    expect(payload.conversationState).not.toHaveProperty("agentContinuationId");
     expect(payload.conversationState.chatTriggerType).toBe("MANUAL");
     expect(payload.profileArn).toBe(CREDENTIALS.providerSpecificData.profileArn);
   });
@@ -102,25 +113,28 @@ describe("Kiro payload omits the top-level systemPrompt (REQUEST_BODY_INVALID)",
 
 describe("KiroExecutor.getOrderedBaseUrls — non-us-east-1 uses the regional Amazon Q host", () => {
   const executor = new KiroExecutor();
+  const RUNTIME = "https://runtime.us-east-1.kiro.dev/generateAssistantResponse";
+  const qHost = (region) => `https://q.${region}.amazonaws.com/generateAssistantResponse`;
+  const codeWhispererHost = (region) =>
+    `https://codewhisperer.${region}.amazonaws.com/generateAssistantResponse`;
 
-  it("routes an eu-central-1 IdC account to q.<region> only", () => {
+  it("routes an eu-central-1 IdC account to q.<region> first", () => {
     const urls = executor.getOrderedBaseUrls({
       providerSpecificData: { authMethod: "idc", region: "eu-central-1" },
     });
 
-    expect(urls).toEqual([
-      "https://q.eu-central-1.amazonaws.com/generateAssistantResponse",
-    ]);
+    expect(urls).toEqual([qHost("eu-central-1"), codeWhispererHost("eu-central-1"), RUNTIME]);
   });
 
-  it("never emits a codewhisperer.<region> host, which does not resolve", () => {
+  it("regionalizes every amazonaws surface and keeps q.<region> first", () => {
     for (const region of ["eu-central-1", "eu-west-1", "us-west-2", "ap-northeast-1"]) {
       const urls = executor.getOrderedBaseUrls({
         providerSpecificData: { authMethod: "idc", region },
       });
-      for (const url of urls) {
-        expect(url).not.toMatch(/codewhisperer\.(?!us-east-1)/);
-      }
+      expect(urls).toEqual([qHost(region), codeWhispererHost(region), RUNTIME]);
+      // The deprecated kiro.dev path gateway must never be tried first: it
+      // answers valid modern payloads with a terminal 400 REQUEST_BODY_INVALID.
+      expect(urls[0]).not.toContain("kiro.dev");
     }
   });
 
@@ -129,36 +143,34 @@ describe("KiroExecutor.getOrderedBaseUrls — non-us-east-1 uses the regional Am
       const urls = executor.getOrderedBaseUrls({
         providerSpecificData: { authMethod, region: "eu-central-1" },
       });
-      expect(urls).toEqual([
-        "https://q.eu-central-1.amazonaws.com/generateAssistantResponse",
-      ]);
+      expect(urls).toEqual([qHost("eu-central-1"), codeWhispererHost("eu-central-1"), RUNTIME]);
     }
   });
 
-  it("leaves us-east-1, an unset region and blank whitespace on the registry list", () => {
+  it("leaves us-east-1, an unset region and blank whitespace on the registry hosts", () => {
     const baseUrls = executor.getBaseUrls();
     for (const region of ["us-east-1", undefined, "   "]) {
-      expect(
-        executor.getOrderedBaseUrls({
-          providerSpecificData: { authMethod: "social", region },
-        })
-      ).toEqual(baseUrls);
+      const urls = executor.getOrderedBaseUrls({
+        providerSpecificData: { authMethod: "social", region },
+      });
+      // Same hosts as the registry — no region is interpolated — only the
+      // ordering changes so the Amazon Q surface is tried first.
+      expect([...urls].sort()).toEqual([...baseUrls].sort());
+      expect(urls[0]).toBe(qHost("us-east-1"));
     }
   });
 
-  it("still puts the CodeWhisperer surface first for us-east-1 api-key auth", () => {
+  it("still puts an amazonaws surface first for us-east-1 api-key auth", () => {
     const urls = executor.getOrderedBaseUrls({
       providerSpecificData: { authMethod: "api_key" },
     });
-    expect(urls[0]).toMatch(/amazonaws\.com/);
+    expect(urls[0]).toBe(qHost("us-east-1"));
   });
 
   it("trims a padded region before interpolating it into the host", () => {
     const urls = executor.getOrderedBaseUrls({
       providerSpecificData: { authMethod: "idc", region: "  eu-central-1  " },
     });
-    expect(urls).toEqual([
-      "https://q.eu-central-1.amazonaws.com/generateAssistantResponse",
-    ]);
+    expect(urls).toEqual([qHost("eu-central-1"), codeWhispererHost("eu-central-1"), RUNTIME]);
   });
 });

@@ -14,15 +14,40 @@ describe("normalizeClaudePassthrough — haiku adaptive thinking (docs 11 §1)",
     expect(out.thinking).toEqual({ type: "adaptive" });
   });
 
-  it("hoists mid-conversation system messages into top-level system", () => {
+  it("folds mid-conversation system messages into the previous user turn", () => {
     const out = normalizeClaudePassthrough({
       messages: [
         { role: "user", content: "hi" },
         { role: "system", content: "be brief" },
       ],
     });
-    expect(out.system).toEqual([{ type: "text", text: "be brief" }]);
+    // Hoisting into body.system would put volatile content (token counters,
+    // reminders) ahead of the whole conversation and invalidate the prefix cache
+    // on every request, so the fold happens in place — top-level system stays unset.
+    expect(out.system).toBeUndefined();
+    expect(out.messages).toEqual([
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "hi" },
+          { type: "text", text: "be brief" },
+        ],
+      },
+    ]);
     expect(out.messages.every((m) => m.role !== "system")).toBe(true);
+  });
+
+  it("turns a leading system message into its own user turn", () => {
+    const out = normalizeClaudePassthrough({
+      messages: [
+        { role: "system", content: "reminder" },
+        { role: "user", content: "hi" },
+      ],
+    });
+    expect(out.messages).toEqual([
+      { role: "user", content: [{ type: "text", text: "reminder" }] },
+      { role: "user", content: "hi" },
+    ]);
   });
 });
 

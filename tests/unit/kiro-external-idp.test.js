@@ -106,7 +106,9 @@ describe("Kiro external_idp (CLIProxyAPI) import and refresh", () => {
     expect(headers.tokentype).toBeUndefined();
 
     expect(executor.buildUrl("claude-sonnet-4.5", true, 0, credentials)).toBe(
-      "https://codewhisperer.us-east-1.amazonaws.com/generateAssistantResponse"
+      // The fork regionalizes and orders the Amazon Q host first, so external_idp
+      // connections land on q.* rather than codewhisperer.*
+      "https://q.us-east-1.amazonaws.com/generateAssistantResponse"
     );
   });
 

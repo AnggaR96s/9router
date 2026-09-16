@@ -339,7 +339,10 @@ describe("getUsageForProvider(grok-cli)", () => {
     });
 
     expect(usage.message).toBeUndefined();
-    expect(usage.plan).toBe("SuperGrok Heavy");
+    // The authoritative /v1/user tier wins over the JWT claim (open-sse/services/
+    // usage/grok-cli.js: `parsed.plan || planFromAccessToken(accessToken)`), so
+    // the mocked profile's XPremiumPlus is reported as-is.
+    expect(usage.plan).toBe("XPremiumPlus");
     expect(usage.quotas["Weekly SuperGrok"]).toMatchObject({
       used: 35,
       total: 100,

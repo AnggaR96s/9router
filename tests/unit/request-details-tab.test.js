@@ -22,7 +22,12 @@ beforeAll(async () => {
   vi.resetModules();
   db = await import("@/lib/db/index.js");
   await db.initDb();
-  await db.updateSettings({ enableObservability2: true, observabilityBatchSize: 1 });
+  // `enableObservability` is the flag requestDetailsRepo.getObservabilityConfig()
+  // reads (settingsRepo DEFAULT_SETTINGS.enableObservability = false, so the repo
+  // drops every saveRequestDetail until it is set). A typo'd key here silently
+  // disabled persistence and made the tab read an empty table.
+  // observabilityBatchSize: 1 forces an immediate flush per save.
+  await db.updateSettings({ enableObservability: true, observabilityBatchSize: 1 });
 
   const { getAdapter } = await import("@/lib/db/driver.js");
   adapter = await getAdapter();

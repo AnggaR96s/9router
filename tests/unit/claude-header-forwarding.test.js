@@ -236,44 +236,55 @@ describe("proxyAwareFetch — api.anthropic.com routing", () => {
     vi.restoreAllMocks();
   });
 
-  it("routes api.anthropic.com to gotScraping (non-streaming) and returns ok response", async () => {
-    // Mock got-scraping before module load
-    vi.doMock("got-scraping", () => {
-      const mockGotScraping = vi.fn().mockResolvedValue({
-        statusCode: 200,
-        statusMessage: "OK",
+  // got-scraping (per-host JA3 spoofing) is DISABLED in this fork:
+  // open-sse/utils/proxyFetch.js keeps the whole block commented out
+  // ("Disabled: not in use. Kept commented for future re-enable") and
+  // proxyAwareFetch now ends with a plain native-fetch return. No host is
+  // routed through got-scraping, so the assertions below lock the
+  // native-fetch behaviour instead.
+  it("routes api.anthropic.com through native fetch (non-streaming) and returns ok response", async () => {
+    const gotScrapingMock = vi.fn();
+    gotScrapingMock.stream = vi.fn();
+    vi.doMock("got-scraping", () => ({ gotScraping: gotScrapingMock }));
+
+    const originalFetch = globalThis.fetch;
+    // proxyFetch.js captures globalThis.fetch at module load as its native
+    // fetch, so the spy must be installed BEFORE the module is imported.
+    const nativeFetch = vi.fn(async () =>
+      new Response(JSON.stringify({ id: "msg_test" }), {
+        status: 200,
+        statusText: "OK",
         headers: { "content-type": "application/json" },
-        rawBody: Buffer.from(JSON.stringify({ id: "msg_test" })),
-      });
-      mockGotScraping.stream = vi.fn();
-      return { gotScraping: mockGotScraping };
-    });
+      })
+    );
+    globalThis.fetch = nativeFetch;
 
     vi.resetModules();
     const { proxyAwareFetch } = await import("open-sse/utils/proxyFetch.js");
-    const { gotScraping } = await import("got-scraping");
 
-    const res = await proxyAwareFetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      // No Accept: text/event-stream → non-streaming path
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "claude-3-5-sonnet-20241022", messages: [] }),
-    });
+    try {
+      const res = await proxyAwareFetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        // No Accept: text/event-stream → non-streaming path
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-3-5-sonnet-20241022", messages: [] }),
+      });
 
-    expect(gotScraping).toHaveBeenCalledOnce();
-    expect(res.ok).toBe(true);
-    expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(data.id).toBe("msg_test");
+      expect(nativeFetch).toHaveBeenCalledOnce();
+      expect(gotScrapingMock).not.toHaveBeenCalled();
+      expect(res.ok).toBe(true);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.id).toBe("msg_test");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
-  it("falls back gracefully when got-scraping throws on non-streaming path", async () => {
-    vi.doMock("got-scraping", () => {
-      const fn = vi.fn().mockRejectedValue(new Error("TLS error"));
-      fn.stream = vi.fn();
-      return { gotScraping: fn };
-    });
-
+  it("returns the upstream response on the non-streaming path", async () => {
+    // Was "falls back gracefully when got-scraping throws" — got-scraping is
+    // never tried anymore, so this keeps the surviving contract: a successful
+    // native fetch response is passed through untouched.
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -288,14 +299,18 @@ describe("proxyAwareFetch — api.anthropic.com routing", () => {
     vi.resetModules();
     const { proxyAwareFetch } = await import("open-sse/utils/proxyFetch.js");
 
-    const res = await proxyAwareFetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: "{}",
-    });
+    try {
+      const res = await proxyAwareFetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
 
-    expect(res.ok).toBe(true);
-    globalThis.fetch = originalFetch;
+      expect(res.ok).toBe(true);
+      expect(res.status).toBe(200);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it("does NOT route non-Anthropic hosts through gotScraping", async () => {

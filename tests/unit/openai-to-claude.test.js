@@ -193,9 +193,26 @@ describe("openaiToClaudeResponse", () => {
       }]
     };
 
-    const result = openaiToClaudeResponse(chunk, state);
-    const inputDelta = result.find(event => event.delta?.type === "input_json_delta");
+    // Tool arguments are buffered and sanitized when the turn finishes
+    // ("Buffer args instead of streaming — sanitize at finish"), so the
+    // input_json_delta is emitted on the finish chunk, not the first one.
+    const openEvents = openaiToClaudeResponse(chunk, state);
+    const finishEvents = openaiToClaudeResponse({
+      id: "chatcmpl-test",
+      model: "gpt-test",
+      choices: [{ delta: {}, finish_reason: "tool_calls" }]
+    }, state);
+    const result = [...openEvents, ...finishEvents];
 
+    const toolBlock = result.find(event => event.content_block?.type === "tool_use");
+    expect(toolBlock.content_block).toEqual({
+      type: "tool_use",
+      id: "call_read",
+      name: "Read",
+      input: {}
+    });
+
+    const inputDelta = result.find(event => event.delta?.type === "input_json_delta");
     expect(inputDelta).toBeDefined();
     expect(JSON.parse(inputDelta.delta.partial_json)).toEqual({
       file_path: "/tmp/example.txt",

@@ -8,9 +8,10 @@ describe("Nous Research provider", () => {
       id: "nous",
       alias: "nous",
       uiAlias: "nous",
-      category: "apikey",
+      category: "oauth",
       authType: "apikey",
-      authModes: ["apikey"],
+      hasOAuth: true,
+      authModes: ["oauth", "apikey"],
       display: {
         name: "Nous Research",
         website: "https://nousresearch.com",
@@ -20,6 +21,15 @@ describe("Nous Research provider", () => {
         modelsUrl: "https://inference-api.nousresearch.com/v1/models",
         validateUrl: "https://inference-api.nousresearch.com/v1/models",
         thinkingFormat: "openai",
+      },
+      // Nous Portal OAuth device flow (Hermes CLI client) alongside the API key.
+      oauth: {
+        clientId: "hermes-cli",
+        deviceCodeUrl: "https://portal.nousresearch.com/api/oauth/device/code",
+        tokenUrl: "https://portal.nousresearch.com/api/oauth/token",
+        refreshUrl: "https://portal.nousresearch.com/api/oauth/token",
+        scope: "inference:invoke",
+        userInfoUrl: "https://portal.nousresearch.com/api/oauth/account",
       },
       passthroughModels: true,
     });

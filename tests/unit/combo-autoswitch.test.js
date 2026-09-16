@@ -35,11 +35,14 @@ describe("detectRequiredCapabilities", () => {
     expect(r.has("vision")).toBe(true);
   });
 
-  it("web_search tool -> search", () => {
+  it("web_search tool -> no capability required (search disabled in auto-switch)", () => {
     const r = detectRequiredCapabilities({ messages: [{ role: "user", content: "q" }], tools: [
       { type: "web_search" },
     ] });
-    expect(r.has("search")).toBe(true);
+    // combo.js detectRequiredCapabilities: "search: temporarily disabled in auto-switch
+    // (feature not wired yet)." — a web_search tool therefore pins nothing today.
+    expect(r.has("search")).toBe(false);
+    expect(r.size).toBe(0);
   });
 
   it("responses input_image -> vision", () => {
@@ -68,7 +71,10 @@ describe("reorderByCapabilities", () => {
   it("keeps order when no model matches", () => {
     const models = ["deepseek/deepseek-chat", "deepseek/deepseek-reasoner"];
     const out = reorderByCapabilities(models, new Set(["vision"]));
-    expect(out).toBe(models);
+    // Order/contents are preserved (stable sort, all tier 2); identity is not part of the
+    // contract — only the early-return paths (empty required / <=1 model) return the same array.
+    expect(out).toStrictEqual(models);
+    expect(out).toHaveLength(2);
   });
 
   it("single model -> unchanged", () => {

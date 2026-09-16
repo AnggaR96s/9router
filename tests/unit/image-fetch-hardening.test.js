@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock DNS lookup so we control which host resolves to what IP.
+// The production guard calls lookup(host, { all: true }), so records must be
+// returned as an ARRAY of { address, family } — a bare object makes
+// resolvePinnedIps() bail out and every case silently returns null.
 const lookupMock = vi.fn();
 vi.mock("node:dns/promises", () => ({ lookup: (...a) => lookupMock(...a) }));
 
@@ -23,7 +26,7 @@ function mockFetchOnce(bytes, ok = true) {
 
 beforeEach(() => {
   lookupMock.mockReset();
-  lookupMock.mockResolvedValue({ address: "93.184.216.34" }); // public by default
+  lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]); // public by default
 });
 afterEach(() => { vi.restoreAllMocks(); });
 
@@ -34,12 +37,12 @@ describe("fetchImageAsBase64 hardening", () => {
   });
 
   it("SSRF: rejects private IP (10.x)", async () => {
-    lookupMock.mockResolvedValue({ address: "10.0.0.5" });
+    lookupMock.mockResolvedValue([{ address: "10.0.0.5", family: 4 }]);
     expect(await fetchImageAsBase64("http://internal.example/x.png")).toBeNull();
   });
 
   it("SSRF: rejects cloud metadata 169.254.169.254", async () => {
-    lookupMock.mockResolvedValue({ address: "169.254.169.254" });
+    lookupMock.mockResolvedValue([{ address: "169.254.169.254", family: 4 }]);
     expect(await fetchImageAsBase64("http://metadata/x.png")).toBeNull();
   });
 
@@ -48,8 +51,20 @@ describe("fetchImageAsBase64 hardening", () => {
   });
 
   it("SSRF: rejects IPv6 loopback", async () => {
-    lookupMock.mockResolvedValue({ address: "::1" });
+    lookupMock.mockResolvedValue([{ address: "::1", family: 6 }]);
     expect(await fetchImageAsBase64("http://x/y.png")).toBeNull();
+  });
+
+  it("SSRF: rejects when ANY record of a multi-A host is private", async () => {
+    // The guard is "reject if any resolved record is private", so a public
+    // first record must not let a private second one through.
+    mockFetchOnce(PNG);
+    lookupMock.mockResolvedValue([
+      { address: "93.184.216.34", family: 4 },
+      { address: "10.0.0.7", family: 4 },
+    ]);
+    expect(await fetchImageAsBase64("http://rebind.example/x.png")).toBeNull();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it("accepts valid PNG from public host", async () => {

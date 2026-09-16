@@ -161,11 +161,19 @@ describe("decodeCompletionChunk", () => {
 });
 
 describe("WindsurfExecutor class", () => {
-  it("constructor wires config from PROVIDERS.windsurf", () => {
+  // The chat endpoint is server.codeium.com in this fork AND upstream
+  // (open-sse/executors/windsurf.js WS_BASE_URL, registry transport.baseUrl
+  // and src/lib/oauth/constants/oauth.js defaultApiServerUrl all agree).
+  // server.self-serve.windsurf.com is only the Devin auth1 chain host
+  // (registry oauth.auth1ApiServerUrl) and is not the GetChatMessage endpoint.
+  const WS_CHAT_URL =
+    "https://server.codeium.com/exa.language_server_pb.LanguageServerService/GetChatMessage";
+
+  it("constructor wires provider + chat endpoint config", () => {
     const ex = new WindsurfExecutor();
     expect(ex.provider).toBe("windsurf");
     expect(ex.config).toBeDefined();
-    expect(ex.config.baseUrl).toContain("server.self-serve.windsurf.com");
+    expect(ex.config.baseUrl).toBe(WS_CHAT_URL);
     expect(typeof ex.execute).toBe("function");
   });
 
@@ -187,12 +195,18 @@ describe("WindsurfExecutor class", () => {
 
   it("buildUrl returns the GetChatMessage endpoint", () => {
     const ex = new WindsurfExecutor();
-    expect(ex.buildUrl()).toBe("https://server.self-serve.windsurf.com/exa.language_server_pb.LanguageServerService/GetChatMessage");
+    expect(ex.buildUrl()).toBe(WS_CHAT_URL);
   });
 
-  it("PROVIDERS.windsurf baseUrl is the chat endpoint (registry in sync)", () => {
-    expect(PROVIDERS.windsurf.baseUrl).toBe(
-      "https://server.self-serve.windsurf.com/exa.language_server_pb.LanguageServerService/GetChatMessage"
-    );
+  it("registry transport.baseUrl is the chat endpoint (registry in sync)", async () => {
+    // windsurf is not in the built PROVIDERS table: registry/index.js keeps the
+    // import commented out ("Temporarily hidden — no tool calling support ...
+    // windsurf gRPC skip ToolCallChunk"), so the executor falls back to its own
+    // WS_CHAT_URL. Assert the registry module directly to keep the
+    // registry↔executor URL invariant locked.
+    expect(PROVIDERS.windsurf).toBeUndefined();
+    const { default: windsurfRegistry } = await import("open-sse/providers/registry/windsurf.js");
+    expect(windsurfRegistry.transport.baseUrl).toBe(WS_CHAT_URL);
+    expect(new WindsurfExecutor().buildUrl()).toBe(windsurfRegistry.transport.baseUrl);
   });
 });

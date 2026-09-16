@@ -39,9 +39,15 @@ describe("provider baseUrl const (full path, no trailing slash)", () => {
   });
 });
 
-describe("antigravity retry (intentional change: 429=6, 503=3)", () => {
-  it("429 attempts = 6", () => {
-    expect(antigravity.transport.retry["429"].attempts).toBe(6);
+describe("antigravity retry (429=3, 500=3, 503=3)", () => {
+  it("429 attempts = 3", () => {
+    // Was 6 when the retry hook landed (bb9e9aa9), lowered to 3 in 3f9382de
+    // ("Fix AG, Kiro, Xiaomi Provider") and kept at 3 when 500 joined the
+    // retry table (639f1204).
+    expect(antigravity.transport.retry["429"].attempts).toBe(3);
+  });
+  it("500 attempts = 3", () => {
+    expect(antigravity.transport.retry["500"].attempts).toBe(3);
   });
   it("503 attempts = 3", () => {
     expect(antigravity.transport.retry["503"].attempts).toBe(3);

@@ -26,12 +26,19 @@ afterAll(() => {
 describe("DB Concurrency — atomic safety", () => {
   it("100 parallel saveRequestUsage → no count loss", async () => {
     const N = 100;
+    // Distinct timestamps on purpose: saveRequestUsage() deliberately dedupes
+    // identical writes (usageRepo.js — an existing usageHistory row with the same
+    // timestamp|provider|model|connectionId|apiKey|promptTokens|completionTokens
+    // makes the insert a no-op). 100 calls that share one millisecond are
+    // therefore collapsed by design, which is not what this test measures.
+    const baseTs = Date.now() - 60_000;
     const promises = [];
     for (let i = 0; i < N; i++) {
       promises.push(db.saveRequestUsage({
         provider: "openai", model: "gpt-4", connectionId: "c1",
         tokens: { prompt_tokens: 10, completion_tokens: 5 },
         endpoint: "/v1/chat", status: "ok",
+        timestamp: new Date(baseTs + i).toISOString(),
       }));
     }
     await Promise.all(promises);
@@ -68,10 +75,13 @@ describe("DB Concurrency — atomic safety", () => {
 
   it("mixed concurrent: usage + details + connections + aliases", async () => {
     const ops = [];
+    // Distinct timestamps — see the dedupe note in the first test.
+    const baseTs = Date.now() - 60_000;
     for (let i = 0; i < 50; i++) {
       ops.push(db.saveRequestUsage({
         provider: "anthropic", model: `m-${i % 3}`, connectionId: "c2",
         tokens: { prompt_tokens: 20 }, status: "ok",
+        timestamp: new Date(baseTs + i).toISOString(),
       }));
       ops.push(db.setModelAlias(`a-${i}`, `target-${i}`));
       ops.push(db.disableModels("openai", [`d-${i}`]));
@@ -151,12 +161,14 @@ describe("DB Concurrency — atomic safety", () => {
 
   it("daily summary aggregates correctly under parallel writes", async () => {
     const N = 50;
+    const baseTs = Date.now() - 30_000;
     const promises = [];
     for (let i = 0; i < N; i++) {
       promises.push(db.saveRequestUsage({
         provider: "google", model: "gemini-pro", connectionId: "cG",
         tokens: { prompt_tokens: 100, completion_tokens: 50 },
         status: "ok",
+        timestamp: new Date(baseTs + i).toISOString(),
       }));
     }
     await Promise.all(promises);
@@ -167,5 +179,32 @@ describe("DB Concurrency — atomic safety", () => {
     expect(g.requests).toBe(N);
     expect(g.promptTokens).toBe(N * 100);
     expect(g.completionTokens).toBe(N * 50);
+  });
+
+  // Pins the dedupe contract that saveRequestUsage() implements
+  // (src/lib/db/repos/usageRepo.js, CHANGELOG "Usage logging dedupe to reduce
+  // stats churn"): re-saving the same entry must not create a second row. The
+  // key carries no request identity, so the same rule also collapses two
+  // *distinct* requests that share a millisecond and identical token counts —
+  // that false positive is the reason the parallel tests above pass their own
+  // timestamps instead of relying on the clock.
+  it("dedupes an identical usage entry instead of double counting it", async () => {
+    const entry = {
+      provider: "dedupe", model: "d", connectionId: "cD",
+      tokens: { prompt_tokens: 7, completion_tokens: 3 }, status: "ok",
+    };
+    const timestamp = new Date().toISOString();
+    await Promise.all([
+      db.saveRequestUsage({ ...entry, timestamp }),
+      db.saveRequestUsage({ ...entry, timestamp }),
+    ]);
+
+    const hist = await db.getUsageHistory({ provider: "dedupe" });
+    expect(hist.length).toBe(1);
+    expect(hist[0].tokens.prompt_tokens).toBe(7);
+
+    const stats = await db.getUsageStats("24h");
+    expect(stats.byProvider.dedupe.requests).toBe(1);
+    expect(stats.byProvider.dedupe.promptTokens).toBe(7);
   });
 });
