@@ -5,6 +5,7 @@ import PropTypes from "prop-types";
 import { useTheme } from "@/shared/hooks/useTheme";
 import { LOCALE_COOKIE, normalizeLocale } from "@/i18n/config";
 import { LOCALE_FLAGS } from "@/shared/constants/locales";
+import { VISUAL_THEMES } from "@/shared/constants/config";
 import ChangelogModal from "./ChangelogModal";
 import LanguageSwitcher from "./LanguageSwitcher";
 import { ConfirmModal } from "./Modal";
@@ -48,19 +49,42 @@ function getLocaleFromCookie() {
   return normalizeLocale(value);
 }
 
+// The four colours of a look, miniaturised. It doubles as the current-value
+// readout on the row, so the active look is visible without opening the list.
+function VisualSwatch({ swatch, size }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`grid grid-cols-2 ${size} shrink-0 rounded-md border border-border overflow-hidden`}
+    >
+      {swatch.slice(0, 4).map((color, i) => (
+        <span key={i} style={{ backgroundColor: color }} />
+      ))}
+    </span>
+  );
+}
+
+VisualSwatch.propTypes = {
+  swatch: PropTypes.arrayOf(PropTypes.string).isRequired,
+  size: PropTypes.string.isRequired,
+};
+
 export default function HeaderMenu({ onLogout }) {
   const [isOpen, setIsOpen] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [shutdownOpen, setShutdownOpen] = useState(false);
+  const [visualOpen, setVisualOpen] = useState(false);
   const [isShuttingDown, setIsShuttingDown] = useState(false);
-  const { toggleTheme, isDark } = useTheme();
+  const { toggleTheme, isDark, visualTheme, setVisualTheme } = useTheme();
   const menuRef = useRef(null);
   // Locale comes from a cookie, so the initial state is read once with a lazy
   // initializer (runs on the client, where document exists) rather than set from
   // an effect — react-hooks/set-state-in-effect rejects the reactive write, and
   // an effect would also fire on mount for a value already known.
   const [locale, setLocale] = useState(getLocaleFromCookie);
+  const activeVisual =
+    VISUAL_THEMES.find((option) => option.id === visualTheme) || VISUAL_THEMES[0];
 
   const handleShutdown = async () => {
     setIsShuttingDown(true);
@@ -110,6 +134,38 @@ export default function HeaderMenu({ onLogout }) {
               label="Theme"
               onClick={() => { toggleTheme(); close(); }}
             />
+            <MenuItem
+              icon="palette"
+              label="Visual theme"
+              trailing={<VisualSwatch swatch={activeVisual.swatch} size="size-4" />}
+              onClick={() => setVisualOpen((v) => !v)}
+            />
+            {visualOpen && (
+              <div role="group" aria-label="Visual theme" className="px-2 pt-1 pb-2">
+                {VISUAL_THEMES.map((option) => {
+                  const active = visualTheme === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setVisualTheme(option.id)}
+                      className={`flex items-center gap-2 w-full px-2 py-2 rounded-lg text-sm text-left transition-colors ${
+                        active
+                          ? "bg-primary/10 text-primary"
+                          : "text-text-main hover:bg-black/5 dark:hover:bg-white/5"
+                      }`}
+                    >
+                      <VisualSwatch swatch={option.swatch} size="size-5" />
+                      <span className="flex-1 min-w-0 truncate">{option.label}</span>
+                      {active && (
+                        <span className="material-symbols-outlined text-[16px]">check</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <MenuItem
               icon="language"
               label="Language"
