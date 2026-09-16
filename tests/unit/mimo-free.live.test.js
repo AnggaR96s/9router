@@ -9,11 +9,25 @@
  *
  *   MIMO_LIVE=1 npx vitest run tests/unit/mimo-free.live.test.js
  *
- * Known upstream drift (measured 2026-09-16): bootstrap still answers 200 with a JWT, but the
- * free chat endpoint now answers 400 {"message":"Unsupported model mimo-auto"} for every model
- * id tried (mimo-auto, mimo, MiMo-Auto, mimo-free, mimo-chat, mimo-auto-1), and the model-list
- * paths 404. So the anti-abuse chat assertion is red even when the flag is on — an upstream /
- * model-registry signal, deliberately kept out of the offline suite.
+ * Status (re-measured 2026-09-16): the free channel is RETIRED, not renamed. bootstrap still
+ * answers 200 with a ~1h JWT, but every chat request is refused upstream with
+ * 400 {"message":"Unsupported model <id>"}. 28 candidate ids probed this session, all refused
+ * (mimo-auto, auto, mimo-auto-free, mimo-code, mimo-v2, mimoclaw, mimo-v2.5, mimo-v2.5-pro,
+ * mimo-v2-flash, mimo-v2-pro, mimo-v2-omni, mimo-v2.5-pro-ultraspeed, MiMo-V2-Flash,
+ * mimo-auto-v2, mimocode, MiMoCode, mimo-auto-pro, mimo-2.5, mimo-code-agent, mimoagent,
+ * mimo-free, mimo-v2.5-free, mimo-v2.5-pro-free, mimo-v2-pro-free, mimo-v2-omni-free,
+ * mimo-v2-flash-free, xiaomi-mimo-v2.5-free, and a request with no model field → the literal
+ * id "unknown-model"); model-list paths answer 403 "Illegal access" or 400 param
+ * "404 NOT_FOUND". So the anti-abuse chat assertion is red even when the flag is on.
+ *
+ * Authoritative source for the id — there is NO id drift: the official Xiaomi CLI ships
+ * packages/opencode/src/util/free-api-sunset.ts (github.com/XiaomiMiMo/MiMo-Code):
+ *   FREE_API_SUNSET_AT = Date.parse("2026-07-26T10:00:00.000Z")
+ *   isFreeApiModel = (m) => m?.providerID === "mimo" && m.modelID === "mimo-auto"
+ * and @mimo-ai/cli 0.1.14 (published 2026-09-02) hard-fails that model with
+ * "MiMo free API service has ended. Sign in or configure a third-party API."
+ * i.e. "mimo-auto" is still the channel's only id; the upstream 400 IS the sunset.
+ * Registry therefore stays hidden:true — do not "fix" this by renaming the model.
  */
 import { describe, it, expect } from "vitest";
 import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js";
