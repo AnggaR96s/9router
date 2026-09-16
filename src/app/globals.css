@@ -854,11 +854,13 @@ button:disabled,
   --tw-shadow: var(--nb-shadow-lg);
 }
 
-/* Buttons: press = translate into the shadow and kill it. This is the
-   interaction signature of the style — the element moves, not just fades. */
+/* Buttons: press = the hard shadow collapses under the surface, i.e. the button
+   sinks into it. The surface itself must NOT move: translate() moves the hit
+   area with it, so a press landing within ~3px of the button's left/top edge
+   released outside the box, no click event was ever delivered, and small icon
+   buttons (header menu, hamburger) silently ate the first tap. */
 [data-visual="neubrutalist"] button:not(:disabled):active,
 [data-visual="neubrutalist"] [role="button"]:not([aria-disabled="true"]):active {
-  transform: translate(3px, 3px);
   box-shadow: none;
 }
 
