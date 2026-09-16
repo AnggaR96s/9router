@@ -53,6 +53,7 @@ export default function ProviderDetailPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showEditNodeModal, setShowEditNodeModal] = useState(false);
   const [showBulkProxyModal, setShowBulkProxyModal] = useState(false);
+  const [modelPickerConnectionId, setModelPickerConnectionId] = useState(null);
   const [selectedConnection, setSelectedConnection] = useState(null);
   const [modelAliases, setModelAliases] = useState({});
   const [customModels, setCustomModels] = useState([]);
@@ -492,6 +493,15 @@ export default function ProviderDetailPage() {
     } catch (error) {
       console.log("Error saving Freebuff model assignment:", error);
     }
+  };
+
+  // The model picker writes through handleModelAssignment so the row control and
+  // the modal cannot drift apart. Close first so the modal never stays open on
+  // top of the row it just changed.
+  const handleAssignModel = async (assignedModel) => {
+    const connectionId = modelPickerConnectionId;
+    setModelPickerConnectionId(null);
+    if (connectionId) await handleModelAssignment(connectionId, assignedModel);
   };
 
   const saveThinkingConfig = async (mode) => {
@@ -1177,7 +1187,7 @@ export default function ProviderDetailPage() {
                   provider: providerId,
                 } : null}
                 modelAssignmentOptions={providerId === "freebuff" ? assignmentModels : null}
-                onModelAssignmentChange={providerId === "freebuff" ? (model) => handleModelAssignment(conn.id, model) : null}
+                onOpenModelPicker={providerId === "freebuff" ? () => setModelPickerConnectionId(conn.id) : null}
                 strictModelAssignment={strictModelAssignment}
                 onUpdateProxy={async (proxyPoolId) => {
                   try {
@@ -1255,6 +1265,55 @@ export default function ProviderDetailPage() {
         {bulkUpdatingProxy && <p className="text-xs text-text-muted">Applying...</p>}
 
         <Button onClick={closeBulkProxyModal} variant="ghost" fullWidth disabled={bulkUpdatingProxy}>
+          Cancel
+        </Button>
+      </div>
+    </Modal>
+  );
+
+  // Assignment options are provider-wide, so the picker only needs to know which
+  // connection is being edited; the current value is read back from that row so
+  // the list can mark it.
+  const modelAssignmentConnection = connections.find((c) => c.id === modelPickerConnectionId) || null;
+  const modelAssignmentValue = modelAssignmentConnection
+    ? (Object.prototype.hasOwnProperty.call(modelAssignmentConnection.providerSpecificData || {}, "assignedModel")
+        ? (modelAssignmentConnection.providerSpecificData.assignedModel || "")
+        : (modelAssignmentConnection.providerSpecificData?.freebuffModel || ""))
+    : "";
+  const modelAssignmentModal = (
+    <Modal
+      isOpen={!!modelPickerConnectionId}
+      onClose={() => setModelPickerConnectionId(null)}
+      title="Assign Model"
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex max-h-[60vh] flex-col overflow-y-auto">
+          <button
+            onClick={() => handleAssignModel("")}
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
+          >
+            <span className="material-symbols-outlined text-[18px] text-text-muted">link_off</span>
+            <span className="text-sm text-text-main">Unassigned</span>
+            {modelAssignmentValue === "" && (
+              <span className="material-symbols-outlined ml-auto text-[16px] text-primary">check</span>
+            )}
+          </button>
+          {assignmentModels.map((model) => (
+            <button
+              key={model.id}
+              onClick={() => handleAssignModel(model.id)}
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
+            >
+              <span className="material-symbols-outlined text-[18px] text-text-muted">hub</span>
+              <span className="truncate text-sm text-text-main">{model.name || model.id}</span>
+              {modelAssignmentValue === model.id && (
+                <span className="material-symbols-outlined ml-auto text-[16px] text-primary">check</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <Button onClick={() => setModelPickerConnectionId(null)} variant="ghost" fullWidth>
           Cancel
         </Button>
       </div>
@@ -1641,6 +1700,59 @@ export default function ProviderDetailPage() {
         </Card>
       )}
 
+      {/* Freebuff routing settings punya card sendiri: ini ngatur cara akun
+          dipilih buat satu model dan jeda antar request, bukan daftar koneksi. */}
+      {providerId === "freebuff" && (
+        <Card>
+          <h2 className="mb-4 text-lg font-semibold">Freebuff Routing</h2>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-4">
+            <div className="flex flex-1 flex-col gap-1.5 border-b border-border/60 pb-3 sm:border-b-0 sm:border-r sm:pb-0 sm:pr-4">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[16px] text-text-muted">shield</span>
+                <span className="text-xs font-medium text-text-main">Strict Model Assignment</span>
+                <Toggle size="sm" checked={strictModelAssignment} onChange={handleStrictAssignmentToggle} />
+              </div>
+              <p className="text-[10px] leading-relaxed text-text-muted">
+                Only accounts assigned to a model may serve it.
+              </p>
+            </div>
+
+            <div className="flex flex-1 flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 text-xs font-medium text-text-main">
+                  <span className="material-symbols-outlined text-[16px] text-text-muted">schedule</span>
+                  Pacing Gap
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={1}
+                    value={pacingGapSeconds}
+                    onChange={(e) => handlePacingGapChange(e.target.value)}
+                    onBlur={(e) => handlePacingGapChange(e.target.value, { commit: true })}
+                    placeholder="20"
+                    aria-label="Pacing gap in seconds"
+                    // w-20, not w-16: measured in a real browser, w-16 clips
+                    // its own text at 5 digits (scrollWidth 69 > clientWidth
+                    // 62), so a value like 99999 would render cut off. w-20
+                    // fits every realistic value up to 6 digits with room
+                    // for the stepper.
+                    className="w-20 shrink-0 rounded-md border border-border bg-background px-2 py-1 text-right text-xs tabular-nums focus:border-primary focus:outline-none"
+                  />
+                  <span className="text-xs text-text-muted">sec</span>
+                </div>
+              </div>
+              <p className="text-[10px] leading-relaxed text-text-muted">
+                Minimum idle gap between two requests on one account.{" "}
+                {String(pacingGapSeconds).trim() === "" && (
+                  <span className="rounded bg-primary/10 px-1 py-px font-medium text-primary">default 20s</span>
+                )}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Connections */}
       {isFreeNoAuth ? (
         <NoAuthProxyCard providerId={providerId} />
@@ -1648,13 +1760,17 @@ export default function ProviderDetailPage() {
         <Card>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-semibold">Connections</h2>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            {/* sm:flex-wrap + whitespace-nowrap di tombol: di desktop sempit tombol
+                pindah ke baris berikutnya utuh, bukan dipaksa menyusut sampai
+                label-nya keluar dari kotak h-7 yang tingginya mati. */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
               {connections.length > 0 && proxyPools.length > 0 && (
                 <Button
                   size="sm"
                   variant="secondary"
                   icon="lan"
                   onClick={() => setShowBulkProxyModal(true)}
+                  className="whitespace-nowrap"
                 >
                   Apply Proxy
                 </Button>
@@ -1667,6 +1783,7 @@ export default function ProviderDetailPage() {
                       variant="danger"
                       icon="delete"
                       onClick={handleBulkDelete}
+                      className="whitespace-nowrap"
                     >
                       Delete Selected ({selectedConnectionIds.length})
                     </Button>
@@ -1677,6 +1794,7 @@ export default function ProviderDetailPage() {
                     icon="sync"
                     onClick={handleRunOneByOneTest}
                     disabled={oneByOneRunning}
+                    className="whitespace-nowrap"
                   >
                     {oneByOneRunning ? "Testing Connection One-by-One..." : "Test Connection One-by-One"}
                   </Button>
@@ -1686,6 +1804,7 @@ export default function ProviderDetailPage() {
                       variant="ghost"
                       icon="stop"
                       onClick={handleStopOneByOneTest}
+                      className="whitespace-nowrap"
                       disabled={oneByOneStopping}
                     >
                       {oneByOneStopping ? "Stopping..." : "Stop"}
@@ -1714,53 +1833,6 @@ export default function ProviderDetailPage() {
                   </div>
                 )}
               </div>
-              {providerId === "freebuff" && (
-                <div className="flex w-full flex-col gap-3 rounded-lg border border-border bg-surface/60 p-3 sm:flex-row sm:items-stretch sm:gap-4">
-                  <div className="flex flex-1 flex-col gap-1.5 border-b border-border/60 pb-3 sm:border-b-0 sm:border-r sm:pb-0 sm:pr-4">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-text-muted">shield</span>
-                      <span className="text-xs font-medium text-text-main">Strict Model Assignment</span>
-                      <Toggle size="sm" checked={strictModelAssignment} onChange={handleStrictAssignmentToggle} />
-                    </div>
-                    <p className="text-[10px] leading-relaxed text-text-muted">
-                      Only accounts assigned to a model may serve it.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-1 flex-col gap-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex items-center gap-2 text-xs font-medium text-text-main">
-                        <span className="material-symbols-outlined text-[16px] text-text-muted">schedule</span>
-                        Pacing Gap
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="number"
-                          min={1}
-                          value={pacingGapSeconds}
-                          onChange={(e) => handlePacingGapChange(e.target.value)}
-                          onBlur={(e) => handlePacingGapChange(e.target.value, { commit: true })}
-                          placeholder="20"
-                          aria-label="Pacing gap in seconds"
-                          // w-20, not w-16: measured in a real browser, w-16 clips
-                          // its own text at 5 digits (scrollWidth 69 > clientWidth
-                          // 62), so a value like 99999 would render cut off. w-20
-                          // fits every realistic value up to 6 digits with room
-                          // for the stepper.
-                          className="w-20 shrink-0 rounded-md border border-border bg-background px-2 py-1 text-right text-xs tabular-nums focus:border-primary focus:outline-none"
-                        />
-                        <span className="text-xs text-text-muted">sec</span>
-                      </div>
-                    </div>
-                    <p className="text-[10px] leading-relaxed text-text-muted">
-                      Minimum idle gap between two requests on one account.{" "}
-                      {String(pacingGapSeconds).trim() === "" && (
-                        <span className="rounded bg-primary/10 px-1 py-px font-medium text-primary">default 20s</span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -1985,6 +2057,7 @@ export default function ProviderDetailPage() {
       </Card>
 
       {bulkActionModal}
+      {modelAssignmentModal}
 
       {/* Modals */}
       {providerId === "kiro" ? (
