@@ -81,9 +81,13 @@ describe("dashboard header stays visible while scrolling", () => {
     );
   });
 
-  it("stops the inner scroller from chaining its overscroll to the root", () => {
+  it("leaves the mobile pull-to-refresh reachable", () => {
     const cls = classExpr(layoutSrc, "custom-scrollbar");
     expect(cls).toBeTruthy();
-    expect(cls).toContain("overscroll-contain");
+    // contain stops the gesture from chaining to the root, and chaining is what
+    // Chrome turns into pull-to-refresh. The shell is no longer scrollable at the
+    // root, so there is nothing else for the chain to move.
+    expect(cls).not.toContain("overscroll-contain");
+    expect(cssSrc).not.toMatch(/overscroll-behavior/);
   });
 });
