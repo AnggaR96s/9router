@@ -91,6 +91,16 @@ function resolvePlan(user, config) {
   return "Grok Build";
 }
 
+/**
+ * True when /v1/user (or the billing config) reported an explicit subscription
+ * tier. resolvePlan()'s "Grok Code"/"Grok Build" strings are display-only
+ * placeholders, so callers must gate on this flag rather than on the plan string
+ * being non-empty — otherwise a planless profile masks the JWT tier claim.
+ */
+function hasAuthoritativePlan(user, config) {
+  return Boolean(subscriptionTier(user, config));
+}
+
 // Display only; upstream remains authoritative for access and quota enforcement.
 function planFromAccessToken(accessToken) {
   try {
@@ -289,6 +299,7 @@ export function parseGrokCliBilling(billing, user = null) {
 
   return {
     plan: resolvePlan(user, config),
+    hasAuthoritativePlan: hasAuthoritativePlan(user, config),
     quotas,
     periodEnd,
     exhausted,
@@ -390,7 +401,12 @@ export async function getGrokCliUsage(accessToken, providerSpecificData = null, 
 
     const parsed = parseGrokCliBilling(billing, user);
     // Prefer authoritative /v1/user plan if present; fall back to JWT claim.
-    parsed.plan = parsed.plan || planFromAccessToken(accessToken);
+    // Gate on the tier flag, not on `parsed.plan` being truthy: parseGrokCliBilling
+    // always returns a display placeholder ("Grok Code"/"Grok Build") when the
+    // profile has no tier, which otherwise masked this fallback entirely.
+    parsed.plan = parsed.hasAuthoritativePlan
+      ? parsed.plan
+      : planFromAccessToken(accessToken) || parsed.plan;
 
     if (!parsed.quotas || Object.keys(parsed.quotas).length === 0) {
       // Paid SuperGrok often returns cap=0 over REST but exposes the shared

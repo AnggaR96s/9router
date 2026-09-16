@@ -361,6 +361,53 @@ describe("getUsageForProvider(grok-cli)", () => {
     expect(Buffer.from(grpcCall[1].body)).toEqual(EMPTY_GRPC_WEB_FRAME);
   });
 
+  it("falls back to the JWT tier claim when /v1/user carries no plan", async () => {
+    // tier 5 => "SuperGrok Heavy" (display map in planFromAccessToken)
+    const accessToken = accessTokenWithTier(5);
+    const planlessProfile = {
+      ...USER_PROFILE,
+      subscriptionTier: null,
+      hasGrokCodeAccess: false,
+    };
+
+    proxyAwareFetch
+      .mockResolvedValueOnce(jsonResponse(ACTIVE_BILLING))
+      .mockResolvedValueOnce(jsonResponse(planlessProfile));
+
+    const usage = await getUsageForProvider({
+      provider: "grok-cli",
+      accessToken,
+    });
+
+    expect(usage.message).toBeUndefined();
+    // No /v1/user tier => the display placeholder (EXHAUSTED/ACTIVE_BILLING carry
+    // isUnifiedBillingUser => "Grok Build") must NOT mask the JWT claim. Without
+    // the fix the placeholder wins and this reads "Grok Build".
+    expect(usage.plan).toBe("SuperGrok Heavy");
+    // REST already returned numeric quotas — no gRPC fallback
+    expect(proxyAwareFetch.mock.calls).toHaveLength(2);
+  });
+
+  it("keeps the placeholder plan when neither /v1/user nor the JWT expose a tier", async () => {
+    proxyAwareFetch
+      .mockResolvedValueOnce(jsonResponse(ACTIVE_BILLING))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ...USER_PROFILE,
+          subscriptionTier: null,
+          hasGrokCodeAccess: false,
+        }),
+      );
+
+    const usage = await getUsageForProvider({
+      provider: "grok-cli",
+      // "header..signature" has no JWT payload, so there is no tier claim to use.
+      accessToken: "test-token",
+    });
+
+    expect(usage.plan).toBe("Grok Build");
+  });
+
   it("keeps subscription message when REST empty and gRPC fails open", async () => {
     proxyAwareFetch
       .mockResolvedValueOnce(jsonResponse(EXHAUSTED_BILLING))
