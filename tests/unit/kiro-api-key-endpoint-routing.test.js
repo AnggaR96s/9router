@@ -36,10 +36,16 @@ describe("Kiro auth-aware endpoint routing", () => {
     ]);
   });
 
-  it("regionalizes AWS endpoints for IDC with Q first", () => {
+  it("keeps the eu-west-1 account on the amazonaws surfaces that exist", () => {
+    // MEASURED 2026-09-16: q.eu-west-1.amazonaws.com and
+    // codewhisperer.eu-west-1.amazonaws.com both return NXDOMAIN from the
+    // zone's own nameservers (dig +trace), so they were an unusable pair: the
+    // DNS failure costs the 502 retry config (3 x 3000ms) per host. eu-west-1
+    // therefore keeps the us-east-1 hosts the registry ships, with Amazon Q
+    // still first so the terminal-400 kiro.dev gateway is never tried first.
     expect(executor.getOrderedBaseUrls(credentials("idc", "eu-west-1"))).toEqual([
-      "https://q.eu-west-1.amazonaws.com/generateAssistantResponse",
-      "https://codewhisperer.eu-west-1.amazonaws.com/generateAssistantResponse",
+      Q,
+      CODEWHISPERER,
       RUNTIME,
     ]);
   });

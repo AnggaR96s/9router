@@ -304,6 +304,13 @@ export class KiroExecutor extends BaseExecutor {
     // 403 "bearer token invalid", so they must hit the CodeWhisperer
     // *.amazonaws.com surface, and in the region the token was minted in
     // (the baseUrls are hardcoded us-east-1).
+    //
+    // MEASURED 2026-09-16: that regionalised surface only EXISTS for us-east-1
+    // and (Amazon Q only) eu-central-1. dig against the zone's own Route 53
+    // nameservers returns NXDOMAIN for codewhisperer.<region> in every
+    // non-us-east-1 region, and for q.<region> in every region except
+    // us-east-1 and eu-central-1. See the `regionalAmazonHosts` allowlist below,
+    // which is the list of hosts an unauthenticated POST actually answered on.
     // Kiro deprecated the legacy path-style GenerateAssistantResponse on
     // runtime.*.kiro.dev (IDE 1.0.228+ moved to POST / + x-amz-target). The
     // path gateway now answers valid modern payloads with 400
@@ -313,10 +320,31 @@ export class KiroExecutor extends BaseExecutor {
     // q/codewhisperer first is safe for every auth method (CLIRO parity).
 
     const region = (credentials?.providerSpecificData?.region || "us-east-1").trim();
-    const regionalize = (u) =>
-      region && region !== "us-east-1" && u.includes("amazonaws.com")
-        ? u.replace(/([a-z]+)\.[a-z0-9-]+\.amazonaws\.com/, `$1.${region}.amazonaws.com`)
-        : u;
+    // Regionalised Amazon surfaces that exist in DNS, measured 2026-09-16 with
+    // dig @8.8.8.8 / @1.1.1.1 and dig +trace against the zone's own Route 53
+    // nameservers, each confirmed with an unauthenticated POST to
+    // /generateAssistantResponse:
+    //   q.us-east-1 / codewhisperer.us-east-1 -> NOERROR, answered 400
+    //       REQUEST_BODY_INVALID (reachable). These are the registry default
+    //       and are reached through the us-east-1 short-circuit above, so they
+    //       are never regionalised and are not listed here.
+    //   q.eu-central-1                       -> NOERROR, answered 400
+    //   codewhisperer.eu-central-1, and BOTH families in every other region
+    //       scanned (eu-west-1/2/3, eu-north-1, eu-south-1, us-east-2,
+    //       us-west-1/2, ca-central-1, ap-south-1, ap-northeast-1/2/3,
+    //       ap-southeast-1/2, ap-east-1, sa-east-1, me-south-1, me-central-1,
+    //       af-south-1, il-central-1) -> NXDOMAIN, no host to connect to
+    // BaseExecutor maps that DNS failure to the 502 retry config (3 attempts ×
+    // 3000ms) before it walks on, and the host can never succeed: measured
+    // 21.4s end to end for an eu-west-1 credential vs 1.0s for us-east-1, both
+    // landing on the same working surface. Regionalise only what can answer;
+    // every other region keeps the us-east-1 hosts the registry ships.
+    const regionalAmazonHosts = new Set(["q.eu-central-1.amazonaws.com"]);
+    const regionalize = (u) => {
+      if (!region || region === "us-east-1" || !u.includes("amazonaws.com")) return u;
+      const candidate = u.replace(/([a-z]+)\.[a-z0-9-]+\.amazonaws\.com/, `$1.${region}.amazonaws.com`);
+      return regionalAmazonHosts.has(candidate.split("/")[2] || "") ? candidate : u;
+    };
 
     const amazon = baseUrls.filter((u) => u.includes("amazonaws.com")).map(regionalize);
     const others = baseUrls.filter((u) => !u.includes("amazonaws.com"));
