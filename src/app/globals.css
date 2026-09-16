@@ -1087,3 +1087,18 @@ button:disabled,
 [data-visual="neubrutalist"] * {
   transition-duration: 120ms;
 }
+
+/* Dashboard shell height. A static 100vh is taller than the visible viewport on
+   a mobile browser (the URL bar eats into it), which leaves the document
+   scrollable; the first downward scroll then carries the header off screen.
+   The dynamic viewport tracks the visible area, so the shell can never be
+   taller than what the user actually sees. 100vh stays as the fallback for
+   browsers that do not know dvh. */
+.dashboard-shell {
+  height: 100vh;
+}
+@supports (height: 100dvh) {
+  .dashboard-shell {
+    height: 100dvh;
+  }
+}
