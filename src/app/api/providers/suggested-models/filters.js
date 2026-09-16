@@ -1,5 +1,6 @@
-// Free OpenCode models that don't use the "-free" id suffix
-const KNOWN_FREE_OPENCODE_MODELS = ["big-pickle"];
+// Free OpenCode models that don't use the "-free" id suffix. union-alpha is free
+// but is served by the Anthropic /zen/v1/messages endpoint, not /chat/completions.
+const KNOWN_FREE_OPENCODE_MODELS = ["big-pickle", "union-alpha"];
 
 // Upstream returns "Model is unavailable" for this id (2026-09-02) — re-enable when fixed
 const DEAD_FREE_OPENCODE_MODELS = new Set([

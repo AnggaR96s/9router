@@ -4,7 +4,7 @@ import { PROVIDERS } from "../config/providers.js";
 import { getThinkingLevels } from "../providers/thinkingLevels.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
-import { isMuseSparkModel } from "../providers/models/helpers.js";
+import { isMuseSparkModel, isOpenCodeMessagesModel } from "../providers/models/helpers.js";
 
 const OPENCODE_UA = "opencode";
 // Models served by /zen/v1/responses; every other model stays on /chat/completions.
@@ -29,6 +29,12 @@ function baseModelId(model) {
 function isResponsesModel(model) {
   const base = baseModelId(model);
   return RESPONSES_MODELS.has(base) || isMuseSparkModel(base);
+}
+
+// Union Alpha Free is only served on the Anthropic endpoint; the catalog lists
+// it beside the Chat Completions ids, so the base URL cannot decide this.
+function isMessagesModel(model) {
+  return isOpenCodeMessagesModel(baseModelId(model));
 }
 
 function resolveOpencodeSession(body, credentials) {
@@ -89,6 +95,7 @@ export class OpenCodeExecutor extends BaseExecutor {
 
   buildUrl(model) {
     const base = this.config.baseUrl;
+    if (isMessagesModel(model)) return `${base}/zen/v1/messages`;
     return isResponsesModel(model)
       ? `${base}/zen/v1/responses`
       : `${base}/zen/v1/chat/completions`;
