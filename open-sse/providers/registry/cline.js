@@ -14,7 +14,12 @@ export default {
     },
   },
   category: "oauth",
-  authModes: ["oauth"],
+  // Cline takes both: the OAuth token minted by the extension flow, and a plain API
+  // key from app.cline.bot/settings/api-keys. Both hit the same api.cline.bot/api/v1
+  // endpoints (measured: GET /users/me 200 and POST /chat/completions 200 with a key),
+  // and the executor already prefers credential.apiKey over accessToken in the Cline
+  // headers, so a key connection needs no extra plumbing. Same shape as codebuddy-cn.
+  authModes: ["oauth", "apikey"],
   hasOAuth: true,
   transport: {
     baseUrl: "https://api.cline.bot/api/v1/chat/completions",
@@ -24,6 +29,12 @@ export default {
     },
     // Non-stream chat completions come back wrapped in {"success":true,"data":{...}}
     quirks: { clineEnvelope: true },
+    // Credential check for both auth modes. GET /users/me answers 401 to a missing or
+    // wrong credential (measured: key 200, no key and a bogus key both 401), so the
+    // connection "Test" button and the add-a-key validation path get a real verdict
+    // instead of "Provider test not supported". Must live in transport — PROVIDERS is
+    // built from entry.transport alone, so a top-level field never reaches them.
+    validateUrl: "https://api.cline.bot/api/v1/users/me",
     tokenUrl: "https://api.cline.bot/api/v1/auth/token",
     refreshUrl: "https://api.cline.bot/api/v1/auth/refresh",
     auth: {
@@ -45,12 +56,8 @@ export default {
     { id: "cline-free/solar-pro4", name: "Solar Pro 4 (Free)" },
     { id: "cline-free/longcat-2.0", name: "LongCat 2.0 (Free)" },
     { id: "poolside/laguna-s-2.1:free", name: "Poolside Laguna S 2.1 (Free)" },
-    // Recommended paid (source: same feed → recommended[])
-    { id: "anthropic/claude-opus-5", name: "Claude Opus 5" },
-    { id: "anthropic/claude-sonnet-5", name: "Claude Sonnet 5" },
-    { id: "openai/gpt-6-astra", name: "GPT-6 Astra" },
-    { id: "x-ai/grok-4.5", name: "Grok 4.5" },
-    { id: "moonshotai/kimi-k3", name: "Kimi K3" },
+    // Paid models are not listed here: a free Cline connection cannot run them, and
+    // the provider page's "Import Cline models" action adds any of them on demand.
   ],
   oauth: {
     appBaseUrl: "https://app.cline.bot",
