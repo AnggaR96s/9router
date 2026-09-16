@@ -1999,7 +1999,7 @@ export default function ProviderDetailPage() {
       {/* Models */}
       <Card>
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-lg font-semibold">
               {"Available Models"}
             </h2>
@@ -2024,7 +2024,7 @@ export default function ProviderDetailPage() {
             const activeIds = allIds.filter((id) => !disabledModelIds.includes(id));
             const canImportProviderModels = (providerId === "aihorde" || providerId === "opencode") && suggestedModels.length > 0;
             return (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {canImportProviderModels && (
                   <Button
                     size="sm"
@@ -2032,17 +2032,18 @@ export default function ProviderDetailPage() {
                     icon="download"
                     onClick={handleImportProviderModels}
                     disabled={importingProviderModels}
+                    className="whitespace-nowrap"
                   >
                     {importingProviderModels ? "Importing..." : "Import from /models"}
                   </Button>
                 )}
                 {disabledModelIds.length > 0 && (
-                  <Button size="sm" variant="secondary" icon="restart_alt" onClick={handleEnableAll}>
+                  <Button size="sm" variant="secondary" icon="restart_alt" onClick={handleEnableAll} className="whitespace-nowrap">
                     Active All
                   </Button>
                 )}
                 {activeIds.length > 0 && (
-                  <Button size="sm" variant="secondary" icon="block" onClick={() => handleDisableAll(activeIds)}>
+                  <Button size="sm" variant="secondary" icon="block" onClick={() => handleDisableAll(activeIds)} className="whitespace-nowrap">
                     Disable All
                   </Button>
                 )}
