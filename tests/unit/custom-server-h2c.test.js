@@ -1,12 +1,16 @@
-const assert = require("node:assert/strict");
-const http = require("node:http");
-const net = require("node:net");
-const test = require("node:test");
+import assert from "node:assert/strict";
+import http from "node:http";
+import net from "node:net";
+import { test } from "vitest";
 
+// custom-server.js monkey-patches http.createServer on load so a client that
+// offers an h2c upgrade is still served over HTTP/1.1 (Node's built-in HTTP/2
+// upgrade path rejects these requests). Importing it here installs the patch for
+// the server this test creates; the module is CJS, so the default import of a
+// builtin stays mutable for the restore below.
 test("serves h2c POST requests as HTTP/1.1", async () => {
   const originalCreateServer = http.createServer;
-  delete require.cache[require.resolve("../../custom-server.js")];
-  require("../../custom-server.js");
+  await import("../../custom-server.js");
 
   const server = http.createServer(async (req, res) => {
     assert.equal(req.url, "/v1/chat/completions");
@@ -32,17 +36,19 @@ test("serves h2c POST requests as HTTP/1.1", async () => {
       const chunks = [];
       const socket = net.createConnection({ host: "127.0.0.1", port }, () => {
         const body = '{"model":"test","stream":true}';
-        socket.write([
-          "POST /v1/chat/completions HTTP/1.1",
-          `Host: 127.0.0.1:${port}`,
-          "Connection: Upgrade, HTTP2-Settings",
-          "Upgrade: h2c",
-          "HTTP2-Settings: AAEAAEAAAAIAAAAAAAMAAAAAAAQBAAAAAAUAAEAAAAYABgAA",
-          `Content-Length: ${Buffer.byteLength(body)}`,
-          "Content-Type: application/json",
-          "",
-          "",
-        ].join("\r\n"));
+        socket.write(
+          [
+            "POST /v1/chat/completions HTTP/1.1",
+            `Host: 127.0.0.1:${port}`,
+            "Connection: Upgrade, HTTP2-Settings",
+            "Upgrade: h2c",
+            "HTTP2-Settings: AAEAAEAAAAIAAAAAAAMAAAAAAAQBAAAAAAUAAEAAAAYABgAA",
+            `Content-Length: ${Buffer.byteLength(body)}`,
+            "Content-Type: application/json",
+            "",
+            "",
+          ].join("\r\n")
+        );
         setImmediate(() => socket.write(body));
       });
       socket.setTimeout(2_000, () => {
