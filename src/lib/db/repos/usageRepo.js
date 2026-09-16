@@ -255,7 +255,7 @@ export async function saveRequestUsage(entry) {
     // better-sqlite3 is sync → no JS yield mid-transaction → no race in same process.
     db.transaction(() => {
       const existing = db.get(
-        `SELECT id, endpoint FROM usageHistory
+        `SELECT id, endpoint, meta FROM usageHistory
          WHERE timestamp = ?
            AND COALESCE(provider, '') = COALESCE(?, '')
            AND COALESCE(model, '') = COALESCE(?, '')
@@ -272,10 +272,17 @@ export async function saveRequestUsage(entry) {
       );
 
       if (existing) {
-        if (!existing.endpoint && entry.endpoint) {
-          db.run(`UPDATE usageHistory SET endpoint = ? WHERE id = ?`, [entry.endpoint, existing.id]);
+        // Content alone cannot tell a repeated write of ONE request apart from two
+        // distinct requests that share a millisecond and identical token counts: the
+        // request identity decides. Callers that send no identity keep the previous
+        // content-only collapse (their duplicates are still absorbed).
+        const seenRequestId = parseJson(existing.meta, {})?.requestId;
+        if (!entry.requestId || !seenRequestId || seenRequestId === entry.requestId) {
+          if (!existing.endpoint && entry.endpoint) {
+            db.run(`UPDATE usageHistory SET endpoint = ? WHERE id = ?`, [entry.endpoint, existing.id]);
+          }
+          return;
         }
-        return;
       }
 
       db.run(
@@ -284,7 +291,7 @@ export async function saveRequestUsage(entry) {
           entry.timestamp, entry.provider || null, entry.model || null,
           entry.connectionId || null, entry.apiKey || null, entry.endpoint || null,
           promptTokens, completionTokens, entry.cost || 0, entry.status || "ok",
-          stringifyJson(tokens), stringifyJson({}),
+          stringifyJson(tokens), stringifyJson(entry.requestId ? { requestId: entry.requestId } : {}),
         ]
       );
 

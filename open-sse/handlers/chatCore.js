@@ -73,6 +73,10 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     }
   })();
   const reqTag = log?.tagForSession ? log.tagForSession(sessionSeed) : (log?.nextTag ? log.nextTag() : "");
+  // Identity of THIS request, used as the usage dedupe key (usageRepo): a session tag
+  // is shared by every request in the conversation, so it cannot separate two
+  // requests that finish in the same millisecond with identical token counts.
+  const requestId = globalThis.crypto?.randomUUID?.() || `${requestStartTime}-${Math.random().toString(36).slice(2, 10)}`;
 
   const sourceFormat = sourceFormatOverride || detectFormat(body);
   const cacheKeyBody = semanticCacheEnabled ? structuredClone(body) : null;
@@ -538,7 +542,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     return createErrorResult(statusCode, errMsg, resetsAtMs);
   }
 
-  const sharedCtx = { provider, model, statisticsModel, body, cacheKeyBody, cacheVariant, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, semanticCacheEnabled, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log };
+  const sharedCtx = { provider, model, statisticsModel, body, cacheKeyBody, cacheVariant, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, semanticCacheEnabled, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, requestId, log };
   const appendLog = (extra) => appendRequestLog({ model: statisticsModel, provider, connectionId, ...extra }).catch(() => { });
   const trackDone = () => trackPendingRequest(model, provider, connectionId, false);
 
