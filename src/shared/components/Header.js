@@ -260,11 +260,11 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
       {/* Page title with breadcrumbs */}
       <div className="flex flex-col min-w-0 flex-1">
         {breadcrumbs.length > 0 ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             {breadcrumbs.map((crumb, index) => (
               <div
                 key={`${crumb.label}-${crumb.href || "current"}`}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 min-w-0"
               >
                 {index > 0 && (
                   <span className="material-symbols-outlined text-text-muted text-base">
@@ -279,7 +279,7 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
                     {crumb.label}
                   </Link>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     {crumb.image && (
                       <ProviderIcon
                         src={crumb.image}
@@ -289,7 +289,7 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
                         fallbackText={crumb.label.slice(0, 2).toUpperCase()}
                       />
                     )}
-                    <h1 className="text-base lg:text-2xl font-semibold text-text-main tracking-tight truncate">
+                    <h1 className="text-base lg:text-2xl font-semibold text-text-main tracking-tight truncate min-w-0">
                       {translate(crumb.label)}
                     </h1>
                   </div>
@@ -299,13 +299,13 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
           </div>
         ) : title ? (
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               {icon && (
                 <span className="material-symbols-outlined text-primary text-xl lg:text-2xl">
                   {icon}
                 </span>
               )}
-              <h1 className="text-base lg:text-2xl font-semibold tracking-tight truncate">
+              <h1 className="text-base lg:text-2xl font-semibold tracking-tight truncate min-w-0">
                 {translate(title)}
               </h1>
             </div>

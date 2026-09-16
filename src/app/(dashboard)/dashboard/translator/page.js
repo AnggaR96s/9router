@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, Button } from "@/shared/components";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
+import { attachEditorTouchGuard } from "@/lib/editorTouchGuard";
 import dynamic from "next/dynamic";
 
 const Editor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
@@ -20,6 +21,10 @@ const STEPS = [
 
 const EDITOR_OPTIONS = {
   minimap: { enabled: false },
+  // Do not swallow the wheel when the editor has nothing left to scroll: on a
+  // laptop touchpad the page then refuses to move while the pointer sits over
+  // an editor. With this off Monaco only consumes the wheel while it scrolls.
+  scrollbar: { alwaysConsumeMouseWheel: false },
   fontSize: 12,
   lineNumbers: "on",
   scrollBeyondLastLine: false,
@@ -238,15 +243,15 @@ export default function TranslatorPage() {
           <Card key={step.id}>
             <div className="p-4 space-y-3">
               {/* Step header */}
-              <div className="flex items-center justify-between">
-                <button onClick={() => toggle(step.id)} className="flex items-center gap-2 flex-1 text-left group">
-                  <span className="material-symbols-outlined text-[20px] text-text-muted group-hover:text-primary transition-colors">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <button onClick={() => toggle(step.id)} className="flex flex-wrap items-center gap-2 flex-1 text-left group min-w-0">
+                  <span className="material-symbols-outlined text-[20px] text-text-muted group-hover:text-primary transition-colors shrink-0">
                     {isExpanded ? "expand_more" : "chevron_right"}
                   </span>
-                  <span className="text-xs font-mono text-text-muted/60 w-4">{step.id}</span>
-                  <h3 className="text-sm font-semibold text-text-main">{step.label}</h3>
-                  <span className="text-xs text-text-muted/60 font-mono">{step.file}</span>
-                  {content && <span className="text-xs text-green-500">({content.length} chars)</span>}
+                  <span className="text-xs font-mono text-text-muted/60 w-4 shrink-0">{step.id}</span>
+                  <h3 className="text-sm font-semibold text-text-main truncate min-w-0">{step.label}</h3>
+                  <span className="text-xs text-text-muted/60 font-mono truncate min-w-0">{step.file}</span>
+                  {content && <span className="text-xs text-green-500 shrink-0 whitespace-nowrap">({content.length} chars)</span>}
                 </button>
                 {!isExpanded && (
                   <div className="flex gap-1 shrink-0">
@@ -259,7 +264,7 @@ export default function TranslatorPage() {
               {/* Expanded content */}
               {isExpanded && (
                 <>
-                  <div className="border border-border rounded-lg overflow-hidden">
+                  <EditorTouchArea>
                     <Editor
                       height="400px"
                       defaultLanguage={step.lang === "text" ? "plaintext" : "json"}
@@ -271,7 +276,7 @@ export default function TranslatorPage() {
                       theme="vs-dark"
                       options={EDITOR_OPTIONS}
                     />
-                  </div>
+                  </EditorTouchArea>
                   <div className="flex gap-2 flex-wrap">
                     <Button size="sm" variant="outline" icon="folder_open" loading={loading[`load-${step.id}`]} onClick={() => handleLoad(step.id)}>Load</Button>
                     <Button size="sm" variant="outline" icon="data_object" onClick={() => handleFormat(step.id)}>Format</Button>
@@ -284,6 +289,16 @@ export default function TranslatorPage() {
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+function EditorTouchArea({ children }) {
+  const ref = useRef(null);
+  useEffect(() => attachEditorTouchGuard(ref.current), []);
+  return (
+    <div ref={ref} className="border border-border rounded-lg overflow-hidden">
+      {children}
     </div>
   );
 }
