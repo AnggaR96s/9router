@@ -19,9 +19,18 @@ export async function createSqlJsAdapter(filePath) {
 
   let dirty = false;
   let saveTimer = null;
+  let txDepth = 0; // >0 while a SAVEPOINT is open
   const SAVE_DEBOUNCE_MS = 100;
 
   function persist() {
+    // sql.js db.export() closes and reopens the underlying connection, which discards
+    // any open SAVEPOINT: a write inside transaction() used to flush here, so the
+    // RELEASE that followed threw "no such savepoint" and rolled the whole body back.
+    // Defer the flush until the outermost transaction has released.
+    if (txDepth > 0) {
+      dirty = true;
+      return;
+    }
     try {
       const data = db.export();
       fs.writeFileSync(filePath, Buffer.from(data));
@@ -97,13 +106,19 @@ export async function createSqlJsAdapter(filePath) {
   function transaction(fn) {
     const sp = `sp_${Math.random().toString(36).slice(2)}`;
     db.exec(`SAVEPOINT ${sp}`);
+    txDepth += 1;
     try {
       const result = fn();
       db.exec(`RELEASE ${sp}`);
+      txDepth -= 1;
       scheduleSave(true);
       return result;
     } catch (e) {
       try { db.exec(`ROLLBACK TO ${sp}`); db.exec(`RELEASE ${sp}`); } catch {}
+      txDepth = Math.max(0, txDepth - 1);
+      // In-memory state is authoritative after a rollback, so flush whatever the
+      // transaction body (and any earlier writes) left behind.
+      scheduleSave(true);
       throw e;
     }
   }
