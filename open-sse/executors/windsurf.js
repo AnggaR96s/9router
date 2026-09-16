@@ -375,8 +375,16 @@ export class WindsurfExecutor extends BaseExecutor {
     super("windsurf", PROVIDERS.windsurf || { id: "windsurf", baseUrl: WS_CHAT_URL });
   }
 
-  buildUrl() {
-    return WS_CHAT_URL;
+  buildUrl(model, stream, urlIndex = 0, credentials = null) {
+    // RegisterUser answers with a per-seat apiServerUrl that the OAuth flow
+    // persists as providerSpecificData.apiServerUrl (src/lib/oauth/providers/windsurf.js
+    // mapTokens). Accounts on a non-default seat host must be addressed there;
+    // absent/blank keeps the registry default (server.codeium.com).
+    const account = credentials?.providerSpecificData?.apiServerUrl;
+    const base = typeof account === "string" && account.trim()
+      ? account.trim().replace(/\/+$/, "")
+      : WS_BASE_URL;
+    return `${base}/${WS_SERVICE}/${WS_METHOD_CHAT}`;
   }
 
   buildHeaders(credentials, stream = true) {
@@ -410,7 +418,7 @@ export class WindsurfExecutor extends BaseExecutor {
     const protoPayload = buildGetChatMessageRequest(apiKey, wsModel, wsMessages);
     const framedPayload = grpcWebFrame(protoPayload);
 
-    const url = this.buildUrl();
+    const url = this.buildUrl(model, stream, 0, credentials);
     const headers = this.buildHeaders(credentials);
     if (upstreamExtraHeaders) Object.assign(headers, upstreamExtraHeaders);
 

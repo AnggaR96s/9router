@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   resolveWsModelId,
   buildGetChatMessageRequest,
@@ -7,6 +7,18 @@ import {
   default as WindsurfExecutor,
 } from "open-sse/executors/windsurf.js";
 import { PROVIDERS } from "open-sse/config/providers.js";
+
+// Network layer mocked so the execute-path routing test can assert the URL
+// actually fetched instead of hitting a real host.
+const fetchMock = vi.hoisted(() => ({ proxyAwareFetch: vi.fn() }));
+vi.mock("open-sse/utils/proxyFetch.js", () => ({
+  proxyAwareFetch: (...args) => fetchMock.proxyAwareFetch(...args),
+}));
+
+// Default (registry) chat endpoint — mirrors WS_BASE_URL in the executor.
+const WS_CHAT_URL_DEFAULT =
+  "https://server.codeium.com/exa.language_server_pb.LanguageServerService/GetChatMessage";
+const WS_CHAT_PATH = "/exa.language_server_pb.LanguageServerService/GetChatMessage";
 
 // ─── Protobuf helpers for building expected wire bytes in tests ──────────────
 
@@ -208,5 +220,88 @@ describe("WindsurfExecutor class", () => {
     const { default: windsurfRegistry } = await import("open-sse/providers/registry/windsurf.js");
     expect(windsurfRegistry.transport.baseUrl).toBe(WS_CHAT_URL);
     expect(new WindsurfExecutor().buildUrl()).toBe(windsurfRegistry.transport.baseUrl);
+  });
+});
+
+// ─── Per-account apiServerUrl routing ────────────────────────────────────────
+// RegisterUser returns a per-seat apiServerUrl which the OAuth flow persists
+// (src/lib/oauth/providers/windsurf.js mapTokens → providerSpecificData.apiServerUrl)
+// and src/sse/services/auth.js hands to the executor as credentials.providerSpecificData.
+// An account on a non-default seat host must be addressed at that host.
+const ACCOUNT_HOST = "https://seat-eu.example.codeium.test";
+
+describe("WindsurfExecutor.buildUrl — per-account apiServerUrl", () => {
+  it("uses credentials.providerSpecificData.apiServerUrl when present", () => {
+    const ex = new WindsurfExecutor();
+    const cred = { accessToken: "sk-ws-acct", providerSpecificData: { apiServerUrl: ACCOUNT_HOST } };
+    expect(ex.buildUrl("gpt-5.5", true, 0, cred)).toBe(`${ACCOUNT_HOST}${WS_CHAT_PATH}`);
+  });
+
+  it("normalizes a trailing slash on the per-account host", () => {
+    const ex = new WindsurfExecutor();
+    const cred = { providerSpecificData: { apiServerUrl: `${ACCOUNT_HOST}/` } };
+    expect(ex.buildUrl("gpt-5.5", true, 0, cred)).toBe(`${ACCOUNT_HOST}${WS_CHAT_PATH}`);
+  });
+
+  it("falls back to the registry default when apiServerUrl is absent or blank", () => {
+    const ex = new WindsurfExecutor();
+    const cases = [
+      undefined,
+      null,
+      {},
+      { providerSpecificData: {} },
+      { providerSpecificData: { apiServerUrl: "" } },
+      { providerSpecificData: { apiServerUrl: "   " } },
+      { providerSpecificData: { apiServerUrl: null } },
+    ];
+    for (const cred of cases) {
+      expect(ex.buildUrl("gpt-5.5", true, 0, cred)).toBe(WS_CHAT_URL_DEFAULT);
+    }
+    expect(ex.buildUrl()).toBe(WS_CHAT_URL_DEFAULT);
+  });
+});
+
+describe("WindsurfExecutor.execute — routes to the account's host", () => {
+  beforeEach(() => fetchMock.proxyAwareFetch.mockReset());
+
+  it("POSTs GetChatMessage to the account apiServerUrl, not the default host", async () => {
+    const ex = new WindsurfExecutor();
+    // 500 → execute() returns early with the raw response + the url it used.
+    fetchMock.proxyAwareFetch.mockResolvedValueOnce(
+      new Response("upstream boom", { status: 500, headers: { "Content-Type": "text/plain" } }),
+    );
+
+    const out = await ex.execute({
+      model: "gpt-5.5",
+      body: { messages: [{ role: "user", content: "hi" }] },
+      stream: true,
+      credentials: {
+        accessToken: "sk-ws-acct",
+        providerSpecificData: { apiServerUrl: ACCOUNT_HOST },
+      },
+      log: null,
+    });
+
+    expect(fetchMock.proxyAwareFetch).toHaveBeenCalledTimes(1);
+    expect(fetchMock.proxyAwareFetch.mock.calls[0][0]).toBe(`${ACCOUNT_HOST}${WS_CHAT_PATH}`);
+    expect(out.url).toBe(`${ACCOUNT_HOST}${WS_CHAT_PATH}`);
+  });
+
+  it("still POSTs to the default host when the credential carries no apiServerUrl", async () => {
+    const ex = new WindsurfExecutor();
+    fetchMock.proxyAwareFetch.mockResolvedValueOnce(
+      new Response("upstream boom", { status: 500, headers: { "Content-Type": "text/plain" } }),
+    );
+
+    const out = await ex.execute({
+      model: "gpt-5.5",
+      body: { messages: [{ role: "user", content: "hi" }] },
+      stream: true,
+      credentials: { accessToken: "sk-ws-plain", providerSpecificData: { authMethod: "imported" } },
+      log: null,
+    });
+
+    expect(fetchMock.proxyAwareFetch.mock.calls[0][0]).toBe(WS_CHAT_URL_DEFAULT);
+    expect(out.url).toBe(WS_CHAT_URL_DEFAULT);
   });
 });
