@@ -3,29 +3,37 @@
  * Trims old conversation messages while preserving System prompts and recent turns.
  */
 
+function trimLeadingOrphans(msgs) {
+  // After slicing to the newest N messages, the window may open with a `tool`
+  // result whose assistant tool_calls was pruned away — drop orphans so the
+  // upstream conversation stays valid.
+  const firstValid = msgs.findIndex((m) => m.role !== "tool");
+  return firstValid > 0 ? msgs.slice(firstValid) : msgs;
+}
+
 export function pruneContextMessages(body, limit = 20) {
   if (!body || typeof body !== "object") return;
   const maxKeep = Math.max(4, Number(limit) || 20);
 
   // OpenAI / Claude format: body.messages
-  if (Array.isArray(body.messages) && body.messages.length > maxKeep + 1) {
+  if (Array.isArray(body.messages) && body.messages.length > maxKeep) {
     const systemMsgs = body.messages.filter((m) => m.role === "system");
     const nonSystemMsgs = body.messages.filter((m) => m.role !== "system");
 
     if (nonSystemMsgs.length > maxKeep) {
       const keptNonSystem = nonSystemMsgs.slice(-maxKeep);
-      body.messages = [...systemMsgs, ...keptNonSystem];
+      body.messages = [...systemMsgs, ...trimLeadingOrphans(keptNonSystem)];
     }
   }
 
   // OpenAI Responses format: body.input
-  if (Array.isArray(body.input) && body.input.length > maxKeep + 1) {
+  if (Array.isArray(body.input) && body.input.length > maxKeep) {
     const systemInputs = body.input.filter((m) => m.role === "system");
     const nonSystemInputs = body.input.filter((m) => m.role !== "system");
 
     if (nonSystemInputs.length > maxKeep) {
       const keptNonSystem = nonSystemInputs.slice(-maxKeep);
-      body.input = [...systemInputs, ...keptNonSystem];
+      body.input = [...systemInputs, ...trimLeadingOrphans(keptNonSystem)];
     }
   }
 
