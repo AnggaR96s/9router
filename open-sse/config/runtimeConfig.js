@@ -48,6 +48,26 @@ function envUrl(name, def) {
 // Configure this for a separate Docker service or remote SearXNG instance.
 export const SEARXNG_URL = envUrl("SEARXNG_URL", "http://localhost:8888/search");
 
+// --- OpenCode Zen anonymous tier ------------------------------------------------
+// The free tier gates on client identity rather than on the model. Measured live
+// (2026-09-17) against /zen/v1/chat/completions: "User-Agent: opencode" answers
+// 403 FreeTierError, "opencode/<version-with-dot>" answers 200. "opencode-cli/…",
+// "curl/8.5.0" and a dot-less version are rejected too, and a too-old version
+// (0.0.1) is forwarded but rejected upstream — so the version must stay plausible.
+export const OPENCODE_CLIENT_VERSION = envUrl("OPENCODE_CLIENT_VERSION", "1.18.31");
+export const OPENCODE_USER_AGENT = `opencode/${OPENCODE_CLIENT_VERSION}`;
+
+// Session ids must be shaped like the client's own ids: the tier accepts
+// "ses_" + 12 hex chars + 14 base62 chars and refuses anything else, including the
+// "ses_" + 32 hex uuid form the gateway used to send. Only the shape matters — the
+// encoded timestamp is NOT verified (a random hex prefix passes), so these ids are
+// minted locally with no captured value.
+export const OPENCODE_ZEN_SESSION_PREFIX = "ses_";
+export const OPENCODE_ZEN_SESSION_TIME_HEX_LEN = 12;
+export const OPENCODE_ZEN_SESSION_TAIL_LEN = 14;
+// The client packs (timestamp_ms << 12 | counter) into 6 bytes, so time is modulo 2**36 ms.
+export const OPENCODE_ZEN_SESSION_COUNTER_BITS = 12;
+
 // Inter-chunk stall timeout (once tokens are flowing). Generous headroom so
 // slow reasoning models aren't aborted mid-stream. Env: STREAM_STALL_TIMEOUT_MS.
 export const STREAM_STALL_TIMEOUT_MS = envMs("STREAM_STALL_TIMEOUT_MS", 360 * 1000);

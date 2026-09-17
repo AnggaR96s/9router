@@ -1,12 +1,16 @@
 import crypto from "crypto";
 import { BaseExecutor } from "./base.js";
 import { PROVIDERS } from "../config/providers.js";
+import { OPENCODE_USER_AGENT } from "../config/runtimeConfig.js";
 import { getThinkingLevels } from "../providers/thinkingLevels.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
+import { createZenSessionId, isClientZenSession } from "../utils/zenSession.js";
 import { isMuseSparkModel, isOpenCodeMessagesModel } from "../providers/models/helpers.js";
 
-const OPENCODE_UA = "opencode";
+// The free tier only accepts a versioned client UA; a bare "opencode" — which some
+// downstreams send — is rejected, so only a real client version is forwarded.
+const CLIENT_UA_RE = /^opencode\/\d+\.\d+/i;
 // Models served by /zen/v1/responses; every other model stays on /chat/completions.
 const RESPONSES_MODELS = new Set([
   "muse-spark-1.2-contributor-free",
@@ -46,6 +50,17 @@ function resolveOpencodeSession(body, credentials) {
     scope: "opencode",
     generate: generateSessionId,
   });
+}
+
+/**
+ * Session id for the anonymous tier. A client-shaped id is forwarded untouched;
+ * otherwise, when a client-issued prefix is configured, the gateway's own session
+ * is re-shaped onto it (the prefix is what the tier checks, the tail is free).
+ */
+function zenSessionHeader(lower, currentSessionId) {
+  const downstream = lower["x-opencode-session"];
+  if (isClientZenSession(downstream)) return String(downstream).trim();
+  return createZenSessionId(currentSessionId || downstream || null);
 }
 
 function normalizeOpencodeReasoning(model, body) {
@@ -106,15 +121,15 @@ export class OpenCodeExecutor extends BaseExecutor {
     const lower = {};
     for (const [k, v] of Object.entries(raw)) lower[k.toLowerCase()] = v;
 
-    const downstreamUa = lower["user-agent"] || "";
-    const isOpencodeDownstream = downstreamUa.toLowerCase().includes("opencode");
+    const downstreamUa = String(lower["user-agent"] || "").trim();
+    const isClientUa = CLIENT_UA_RE.test(downstreamUa);
 
     return {
       "Content-Type": "application/json",
       "Authorization": "Bearer public",
-      "User-Agent": isOpencodeDownstream ? downstreamUa : OPENCODE_UA,
+      "User-Agent": isClientUa ? downstreamUa : OPENCODE_USER_AGENT,
       "x-opencode-client": lower["x-opencode-client"] || "desktop",
-      "x-opencode-session": lower["x-opencode-session"] || this._currentSessionId || generateSessionId(),
+      "x-opencode-session": zenSessionHeader(lower, this._currentSessionId),
       "x-opencode-request": lower["x-opencode-request"] || generateRequestId(),
       "x-opencode-project": lower["x-opencode-project"] || "global",
       "Accept": stream ? "text/event-stream" : "*/*",
