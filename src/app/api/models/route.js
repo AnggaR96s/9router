@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getModelAliases, setModelAlias, getCustomModels } from "@/models";
 import { getDisabledModels } from "@/lib/disabledModelsDb";
 import { AI_MODELS } from "@/shared/constants/config";
-import { getProviderAlias } from "@/shared/constants/providers";
+import { getProviderAlias, resolveProviderId } from "@/shared/constants/providers";
 import { getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
 import { applyModelLimitsToCaps, withoutModelLimits } from "@/shared/utils/modelTokenLimits";
 
@@ -28,7 +28,7 @@ export async function GET() {
         const fullModel = `${m.provider}/${m.model}`;
         const providerAlias = getProviderAlias(m.provider) || m.provider;
         const routedModel = `${providerAlias}/${m.model}`;
-        const c = getCapabilitiesForModel(m.provider, m.model);
+        const c = getCapabilitiesForModel(resolveProviderId(m.provider), m.model);
         const custom = customByFullModel.get(fullModel) || customByFullModel.get(routedModel);
         return {
           ...m,
@@ -53,7 +53,7 @@ export async function GET() {
     });
     for (const m of customModels) {
       const fullModel = `${m.providerAlias}/${m.id}`;
-      const c = getCapabilitiesForModel(m.providerAlias, m.id);
+      const c = getCapabilitiesForModel(resolveProviderId(m.providerAlias), m.id);
       models.push({
         provider: m.providerAlias,
         model: m.id,

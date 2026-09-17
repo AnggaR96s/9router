@@ -153,6 +153,19 @@ export const PROVIDER_CAPABILITIES = {
     "deepseek-ai/deepseek-v4-pro": { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 65536 },
     "deepseek-ai/deepseek-v4-flash": { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 65536 },
   },
+  // GitHub Copilot's "Auto" has no catalog entry anywhere: the concrete model is
+  // chosen per account and per request, and the id is synthetic, so nothing in the
+  // name-pattern or models.dev layers can describe it. Without an entry the picker
+  // read vision:false for gh/auto and dropped the row whenever a vision filter was
+  // on. Keyed by registry id as every other entry here is — the public model
+  // listing resolves the alias first, but the dashboard route that feeds the picker
+  // passes it straight through, so they only agree on an id. The window is the GPT
+  // family floor rather than the largest model auto can resolve to (claude reaches
+  // 1M), following the rule that over-claiming a window wedges a thread while
+  // under-claiming only prunes early.
+  "github": {
+    "auto": { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 400000, maxOutput: 128000 },
+  },
   "codex": {
     "gpt-6-astra":               { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
     "gpt-5.6-sol":               CODEX_GPT_56_SOL_CAPS,
