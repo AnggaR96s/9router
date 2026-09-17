@@ -730,9 +730,16 @@ export default function ProxyPoolsPage() {
                   {pool.noProxy ? (
                     <p className="text-xs text-text-muted truncate">No proxy: {pool.noProxy}</p>
                   ) : null}
-                  <p className="text-[11px] text-text-muted mt-1">
+                  <p className="text-[11px] text-text-muted mt-1 break-words">
                     Last tested: {formatDateTime(pool.lastTestedAt)}
-                    {pool.lastError ? ` · ${pool.lastError}` : ""}
+                    {pool.lastError ? (
+                      <>
+                        {" · "}
+                        <span className="break-all">{pool.lastError}</span>
+                      </>
+                    ) : (
+                      ""
+                    )}
                   </p>
                   </div>
                 </div>
