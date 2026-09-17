@@ -94,7 +94,7 @@ const OFFER_CACHE_TTL_MS = 45_000;
 // the canonical Freebuff CLI root prompt (server gate
 // requestHasFreebuffSystemMarker → 403 free_mode_cli_required). The check is a
 // byte-exact prefix test on position 0, so we prepend the canonical opening.
-// Same anti-abuse pattern as mimo-free's MIMO_SYSTEM_MARKER injection.
+// Same anti-abuse pattern as the other free channels' system-marker injection.
 const FREEBUFF_SYSTEM_MARKER = "You are Buffy, the strategic coding assistant.";
 
 // Canonical openings accepted by the server gate (mirrors the CLI's

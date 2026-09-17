@@ -1,4 +1,6 @@
 // Auto-generated: static imports for all registry entries
+// Aliases stay contiguous (0..n-1) — renumber with scripts/renumber-registry-index.mjs
+// after removing an entry, so the array order (PROVIDERS key order) is preserved.
 import p0 from "./alicode-intl.js";
 import p1 from "./alicode.js";
 import p2 from "./anthropic.js";
@@ -56,83 +58,81 @@ import p53 from "./kimi.js";
 import p54 from "./kiro.js";
 import p55 from "./linkup.js";
 import p56 from "./local-device.js";
-import p57 from "./mimo-free.js";
-import p58 from "./minimax-cn.js";
-import p59 from "./minimax.js";
-import p60 from "./mistral.js";
-import p61 from "./mmf.js";
-import p62 from "./nanobanana.js";
-import p63 from "./nebius.js";
-import p64 from "./nvidia.js";
-import p65 from "./ollama-local.js";
-import p66 from "./ollama.js";
-import p123 from "./ollama-search.js";
-import p67 from "./openai.js";
-import p68 from "./opencode-go.js";
-import p69 from "./opencode.js";
-import p70 from "./openrouter.js";
-import p71 from "./perplexity-web.js";
-import p72 from "./perplexity.js";
-import p73 from "./perplexity-agent.js";
-import p74 from "./playht.js";
-import p75 from "./qoder.js";
-import p77 from "./recraft.js";
-import p78 from "./runwayml.js";
-import p79 from "./sdwebui.js";
-import p80 from "./searchapi.js";
-import p81 from "./searxng.js";
-import p82 from "./serper.js";
-import p83 from "./siliconflow.js";
-import p84 from "./stability-ai.js";
-import p85 from "./tavily.js";
-import p86 from "./together.js";
-import p87 from "./topaz.js";
-import p88 from "./tortoise.js";
-import p89 from "./venice.js";
-import p90 from "./vercel-ai-gateway.js";
-import p91 from "./vertex-partner.js";
-import p92 from "./vertex.js";
-import p93 from "./volcengine-ark.js";
-import p94 from "./voyage-ai.js";
-import p95 from "./xai.js";
-import p96 from "./xiaomi-mimo.js";
-import p97 from "./xiaomi-tokenplan.js";
-import p98 from "./youcom.js";
-import p99 from "./alims-intl.js";
-import p100 from "./codebuddy-intl.js";
+import p57 from "./minimax-cn.js";
+import p58 from "./minimax.js";
+import p59 from "./mistral.js";
+import p60 from "./nanobanana.js";
+import p61 from "./nebius.js";
+import p62 from "./nvidia.js";
+import p63 from "./ollama-local.js";
+import p64 from "./ollama.js";
+import p116 from "./ollama-search.js";
+import p65 from "./openai.js";
+import p66 from "./opencode-go.js";
+import p67 from "./opencode.js";
+import p68 from "./openrouter.js";
+import p69 from "./perplexity-web.js";
+import p70 from "./perplexity.js";
+import p71 from "./perplexity-agent.js";
+import p72 from "./playht.js";
+import p73 from "./qoder.js";
+import p74 from "./recraft.js";
+import p75 from "./runwayml.js";
+import p76 from "./sdwebui.js";
+import p77 from "./searchapi.js";
+import p78 from "./searxng.js";
+import p79 from "./serper.js";
+import p80 from "./siliconflow.js";
+import p81 from "./stability-ai.js";
+import p82 from "./tavily.js";
+import p83 from "./together.js";
+import p84 from "./topaz.js";
+import p85 from "./tortoise.js";
+import p86 from "./venice.js";
+import p87 from "./vercel-ai-gateway.js";
+import p88 from "./vertex-partner.js";
+import p89 from "./vertex.js";
+import p90 from "./volcengine-ark.js";
+import p91 from "./voyage-ai.js";
+import p92 from "./xai.js";
+import p93 from "./xiaomi-mimo.js";
+import p94 from "./xiaomi-tokenplan.js";
+import p95 from "./youcom.js";
+import p96 from "./alims-intl.js";
+import p97 from "./codebuddy-intl.js";
 // Temporarily hidden — no tool calling support (trae SOLO agent / windsurf gRPC skip ToolCallChunk).
 // Re-enable by uncommenting both the import and the array entry below.
 // import p102 from "./trae.js";
-import p103 from "./zed.js";
-import p105 from "./api-airforce.js";
-import p106 from "./baidu.js";
-import p107 from "./bazaarlink.js";
-import p108 from "./bluesminds.js";
-import p109 from "./kilo-gateway.js";
-import p110 from "./llm7.js";
-import p111 from "./sambanova.js";
-import p112 from "./tencent.js";
-import p113 from "./morph.js";
+import p98 from "./zed.js";
+import p99 from "./api-airforce.js";
+import p100 from "./baidu.js";
+import p101 from "./bazaarlink.js";
+import p102 from "./bluesminds.js";
+import p103 from "./kilo-gateway.js";
+import p104 from "./llm7.js";
+import p105 from "./sambanova.js";
+import p106 from "./tencent.js";
+import p107 from "./morph.js";
 // import p114 from "./devin-cli.js";
 // import p104 from "./windsurf.js";
-import p115 from "./poolside.js";
-import p116 from "./tokenrouter.js";
-import p117 from "./selfhosted-stt.js";
-import p118 from "./selfhosted-tts.js";
-import p119 from "./selfhosted-embedding.js";
-import p120 from "./fish-audio.js";
-import p121 from "./alitp-intl.js";
-import p122 from "./xquik.js";
-import p124 from "./freebuff.js";
-import p125 from "./aihorde.js";
-import p126 from "./bai.js";
-import p127 from "./tokenharbor.js";
-import p128 from "./nous.js";
-import p129 from "./orcarouter.js";
-import p130 from "./apinex.js";
-import p131 from "./qwen.js";
-import p132 from "./unikey.js";
-import p133 from "./atria.js";
+import p108 from "./poolside.js";
+import p109 from "./tokenrouter.js";
+import p110 from "./selfhosted-stt.js";
+import p111 from "./selfhosted-tts.js";
+import p112 from "./selfhosted-embedding.js";
+import p113 from "./fish-audio.js";
+import p114 from "./alitp-intl.js";
+import p115 from "./xquik.js";
+import p117 from "./freebuff.js";
+import p118 from "./aihorde.js";
+import p119 from "./bai.js";
+import p120 from "./tokenharbor.js";
+import p121 from "./nous.js";
+import p122 from "./orcarouter.js";
+import p123 from "./apinex.js";
+import p124 from "./qwen.js";
+import p125 from "./unikey.js";
+import p126 from "./atria.js";
 export default [
   p0,
   p1,
@@ -210,6 +210,7 @@ export default [
   p73,
   p74,
   p75,
+  p76,
   p77,
   p78,
   p79,
@@ -231,22 +232,26 @@ export default [
   p95,
   p96,
   p97,
+  // p102, // trae — hidden, no tool calling
   p98,
   p99,
   p100,
-  // p102, // trae — hidden, no tool calling
+  p101,
+  p102,
   p103,
+  p104,
   p105,
   p106,
   p107,
+  // p114, // devin-cli — hidden, spawns local agent with shell/fs access
+  // p104, // windsurf — hidden, no tool calling
   p108,
   p109,
   p110,
   p111,
   p112,
   p113,
-  // p114, // devin-cli — hidden, spawns local agent with shell/fs access
-  // p104, // windsurf — hidden, no tool calling
+  p114,
   p115,
   p116,
   p117,
@@ -259,11 +264,4 @@ export default [
   p124,
   p125,
   p126,
-  p127,
-  p128,
-  p129,
-  p130,
-  p131,
-  p132,
-  p133,
 ];

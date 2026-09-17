@@ -704,11 +704,6 @@
     "validateUrl": "https://api.llm7.io/v1/models",
     "format": "openai"
   },
-  "mimo-free": {
-    "baseUrl": "https://api.xiaomimimo.com/api/free-ai/openai/chat",
-    "noAuth": true,
-    "format": "openai"
-  },
   "minimax-cn": {
     "baseUrl": "https://api.minimaxi.com/anthropic/v1/messages",
     "format": "claude",
@@ -819,11 +814,6 @@
     "quirks": {
       "dropClientMetadata": true
     },
-    "format": "openai"
-  },
-  "mmf": {
-    "baseUrl": "https://api.xiaomimimo.com/api/free-ai/openai/chat",
-    "noAuth": true,
     "format": "openai"
   },
   "morph": {

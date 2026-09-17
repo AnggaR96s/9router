@@ -21,7 +21,7 @@
  * tests/unit/opencode-union-alpha-messages.test.js.
  *
  * LIVE/NETWORK test: skipped unless OPENCODE_LIVE=1 (same convention as
- * tests/unit/mimo-free.live.test.js) so the offline suite never hits the network.
+ * other *.live.test.js files) so the offline suite never hits the network.
  *
  *   OPENCODE_LIVE=1 npx vitest run tests/unit/opencode-union-alpha.live.test.js
  */

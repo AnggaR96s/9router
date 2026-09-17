@@ -93,7 +93,6 @@ describe("LLM providers that gained a validateUrl", () => {
   const cases = [
     ["alitp-intl", "token-plan.ap-southeast-1.maas.aliyuncs.com"],
     ["qwen", "dashscope-intl.aliyuncs.com"],
-    ["mmf", "api.xiaomimimo.com"],
   ];
 
   it.each(cases)("%s declares a validateUrl on its real host", async (pid, host) => {
