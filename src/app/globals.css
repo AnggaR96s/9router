@@ -1104,3 +1104,274 @@ button:disabled,
     height: 100dvh;
   }
 }
+
+/* ============================================================
+   VISUAL THEME: PINKNEON  ([data-visual="pinkneon"])
+
+   Third look: neon pink on frosted glass. Same grammar as the block above —
+   a token set plus a handful of class overrides, all scoped to
+   [data-visual="pinkneon"] so the other two looks are untouched.
+
+   What makes it read as "neon blur" rather than "pink default":
+   1. A layered aurora on the shell (radial hot-pink / violet / cyan washes).
+      Without something behind them, translucent surfaces have nothing to
+      diffuse and the blur is invisible — so the aurora and the frosted cards
+      are one feature, not two.
+   2. Cards are translucent and carry `backdrop-filter`, so the aurora bleeds
+      through them blurred. The translucency lives in the card rule (not in
+      --color-surface) because only blurred elements can afford a low alpha:
+      dropdowns and modals read --color-surface without a blur, and a very
+      translucent surface there would show the page through its own text.
+   3. Depth is a glow, not an offset: shadows are wide, low-alpha and pink.
+
+   Contrast: white on the hot pink fill measures 3.5:1 (light) and 3.3:1
+   (dark), under AA, so solid pink fills get INK labels — same move the
+   neubrutalist block makes for its yellow. Text-safe accent steps are
+   separate tokens (--pn-text-*) measured against the composited surfaces:
+   the surfaces are translucent, so the ratio is computed after compositing
+   them over --color-bg, not from the raw token.
+   ============================================================ */
+
+[data-visual="pinkneon"] {
+  /* ---- Palette ---------------------------------------------------------- */
+  --pn-hot: #FF2E88;
+  --pn-hot-deep: #C90D66;
+  --pn-magenta: #B26BFF;
+  --pn-cyan: #22D3EE;
+  /* Ink for labels sitting on a pink fill: 5.2:1 on the hot pink, 6.0:1 on
+     the violet. White would be 3.5:1 there. */
+  --pn-ink: #33001A;
+  --pn-glass: rgba(255, 255, 255, 0.55);
+
+  /* ---- Soft, generous rounding: glass has no sharp corners ------------- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-3xl: 28px;
+  --radius-brand: 14px;
+  --radius-brand-lg: 20px;
+
+  /* ---- Surfaces: near-opaque tints of the same pink family ------------- */
+  --color-bg: #FFF0F6;
+  --color-bg-alt: #FBE2EF;
+  --color-surface: rgba(255, 255, 255, 0.88);
+  --color-surface-2: rgba(255, 255, 255, 0.92);
+  --color-surface-3: #F7D6E7;
+  --color-sidebar: rgba(255, 255, 255, 0.86);
+
+  --color-border: rgba(214, 20, 110, 0.24);
+  --color-border-subtle: rgba(214, 20, 110, 0.13);
+
+  --color-text: #2B0A1C;
+  --color-text-main: #2B0A1C;
+  --color-text-muted: #7A4560;
+  --color-text-subtle: #8C6377;
+
+  --color-brand-50: #FFF0F6;
+  --color-brand-100: #FFDCEC;
+  --color-brand-200: #FFBCD9;
+  --color-brand-300: #FF8FC0;
+  --color-brand-400: #FF5EA6;
+  --color-brand-500: var(--pn-hot);
+  --color-brand-600: #E61C76;
+  --color-brand-700: #C40F62;
+  --color-brand-800: #9C0A4E;
+  --color-brand-900: #73063A;
+  --color-primary: var(--pn-hot);
+  --color-primary-hover: #E61C76;
+  --color-accent: var(--pn-magenta);
+
+  --color-danger: #D01A38;
+  --color-success: #0E8F55;
+  --color-warning: #B45309;
+  --color-info: #6366F1;
+
+  /* ---- Text-safe accent steps (measured on the composited glass) -------- */
+  --pn-text-primary: #A80058;
+  --pn-text-success: #0E7A4A;
+  --pn-text-warning: #96470A;
+  --pn-text-info: #5B21B6;
+  --pn-text-danger: #AF1240;
+
+  /* ---- Depth = glow ---------------------------------------------------- */
+  --shadow-soft: 0 10px 30px -14px rgba(214, 20, 110, 0.45);
+  --shadow-warm: 0 16px 40px -18px rgba(178, 107, 255, 0.40);
+  --shadow-elevated: 0 26px 60px -22px rgba(214, 20, 110, 0.42);
+  --shadow-elev: var(--shadow-elevated);
+  --shadow-focus: 0 0 0 3px rgba(255, 46, 136, 0.30);
+
+  color-scheme: light;
+}
+
+/* Dark variant: the main event — hot pink emissive on near-black plum. */
+[data-visual="pinkneon"].dark {
+  --pn-hot: #FF3D95;
+  --pn-hot-deep: #E01C7C;
+  --pn-magenta: #C084FC;
+  --pn-cyan: #67E8F9;
+  --pn-ink: #2B0014;
+  --pn-glass: rgba(52, 14, 48, 0.62);
+
+  --color-bg: #0A0210;
+  --color-bg-alt: #140520;
+  --color-surface: rgba(58, 15, 53, 0.86);
+  --color-surface-2: rgba(74, 21, 68, 0.88);
+  --color-surface-3: rgba(96, 28, 88, 0.90);
+  --color-sidebar: rgba(26, 8, 36, 0.88);
+
+  --color-border: rgba(255, 61, 149, 0.30);
+  --color-border-subtle: rgba(255, 61, 149, 0.16);
+
+  --color-text: #FFEFF7;
+  --color-text-main: #FFEFF7;
+  --color-text-muted: #D7AFC4;
+  --color-text-subtle: #C39BB1;
+
+  --color-brand-50: #2B0A22;
+  --color-brand-100: #3D0F30;
+  --color-brand-200: #55143F;
+  --color-brand-300: #7A1C58;
+  --color-brand-400: #C42A76;
+  --color-brand-500: var(--pn-hot);
+  --color-brand-600: #FF66AE;
+  --color-brand-700: #FF8FC0;
+  --color-brand-800: #FFB3D4;
+  --color-brand-900: #FFDCEC;
+  --color-primary: var(--pn-hot);
+  --color-primary-hover: #FF66AE;
+  --color-accent: var(--pn-magenta);
+
+  --color-danger: #FF5C7A;
+  --color-success: #34D399;
+  --color-warning: #FBBF24;
+  --color-info: #A78BFA;
+
+  --pn-text-primary: #FF9CCB;
+  --pn-text-success: #5FE3A6;
+  --pn-text-warning: #FFC46B;
+  --pn-text-info: #C4A2FF;
+  --pn-text-danger: #FF8AA3;
+
+  /* A hairline ring is what keeps a translucent card from dissolving into the
+     aurora; it is part of the shadow so no box grows by a border width. */
+  --shadow-soft: 0 0 0 1px rgba(255, 61, 149, 0.12), 0 14px 34px -14px rgba(255, 61, 149, 0.55);
+  --shadow-warm: 0 0 0 1px rgba(192, 132, 252, 0.14), 0 18px 44px -18px rgba(192, 132, 252, 0.50);
+  --shadow-elevated: 0 0 0 1px rgba(255, 61, 149, 0.16), 0 30px 64px -22px rgba(255, 61, 149, 0.60);
+  --shadow-elev: var(--shadow-elevated);
+  --shadow-focus: 0 0 0 3px rgba(255, 61, 149, 0.42);
+
+  color-scheme: dark;
+}
+
+/* ---- Frosted surfaces ------------------------------------------------- */
+
+/* The surfaces the app actually renders. The card component, modal panels and
+   most page cards carry the exact token `bg-surface`
+   (`"bg-surface border border-border-subtle"`), while `.card-soft` /
+   `.card-elev` exist in this stylesheet but are used by NOTHING — a rule
+   against those names would look implemented and paint nothing. `[class~=]`
+   is an exact-token match on purpose: a substring match would also catch
+   `bg-surface-2`, `hover:bg-surface` and `bg-surface/60`, i.e. controls and
+   washes that must stay opaque (and a frosted nested panel over a frosted card
+   just muddies both).
+   The hairline edge is a 0-blur inset shadow — `border` would grow the box by
+   2px and shift every width off its measured value. */
+[data-visual="pinkneon"] [class~="bg-surface"] {
+  background-color: var(--pn-glass);
+  /* Standard property ONLY. Hand-writing the -webkit- prefix makes the
+     minifier merge the pair into the prefixed form alone, and modern Chromium
+     does not support that alias at all — the blur silently computes to `none`
+     while the translucent background still paints, i.e. glass without blur. */
+  backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: 0 0 0 1px var(--color-border), var(--shadow-soft);
+}
+
+[data-visual="pinkneon"] .bg-vibrancy {
+  background: var(--pn-glass);
+  backdrop-filter: blur(26px) saturate(160%);
+}
+
+/* The aurora. It hangs off the shell because the shell is what carries the
+   page background (`bg-bg`), and it is `background-image` over the existing
+   colour so nothing has to be repainted to keep the base fill. */
+[data-visual="pinkneon"] .dashboard-shell {
+  background-image: radial-gradient(58rem 38rem at 8% -14%, rgba(255, 46, 136, 0.30), transparent 62%),
+    radial-gradient(48rem 34rem at 104% 4%, rgba(178, 107, 255, 0.26), transparent 64%),
+    radial-gradient(44rem 30rem at 46% 120%, rgba(34, 211, 238, 0.16), transparent 62%);
+}
+
+[data-visual="pinkneon"].dark .dashboard-shell {
+  background-image: radial-gradient(58rem 38rem at 8% -14%, rgba(255, 61, 149, 0.34), transparent 60%),
+    radial-gradient(48rem 34rem at 104% 4%, rgba(192, 132, 252, 0.30), transparent 62%),
+    radial-gradient(44rem 30rem at 46% 120%, rgba(103, 232, 249, 0.16), transparent 62%);
+}
+
+/* Headings glow in the dark scheme. Same-hue glow behind same-hue text: it
+   softens the letterforms without eating their contrast. */
+[data-visual="pinkneon"].dark h1,
+[data-visual="pinkneon"].dark h2,
+[data-visual="pinkneon"].dark h3 {
+  text-shadow: 0 0 22px rgba(255, 61, 149, 0.35);
+}
+
+/* ---- Solid pink fills carry ink, not white ---------------------------- */
+[data-visual="pinkneon"] .bg-primary,
+[data-visual="pinkneon"] .bg-primary-hover,
+[data-visual="pinkneon"] .bg-accent,
+[data-visual="pinkneon"] .bg-brand-200,
+[data-visual="pinkneon"] .bg-brand-300,
+[data-visual="pinkneon"] .bg-brand-400,
+[data-visual="pinkneon"] .bg-brand-500,
+[data-visual="pinkneon"] .bg-brand-600 {
+  color: var(--pn-ink);
+}
+
+/* An accent fill that carries ink also gets to glow like a neon tube. The
+   switch track is the same class (`bg-brand-500` when checked) inside a
+   32x16 box, where a glow reads as a halo around a control rather than as
+   light, so it is excluded by role. */
+[data-visual="pinkneon"] .bg-primary:not([role="switch"]),
+[data-visual="pinkneon"] .bg-brand-500:not([role="switch"]) {
+  box-shadow: 0 0 22px -6px rgba(255, 46, 136, 0.75);
+}
+
+/* ---- Accent TEXT ------------------------------------------------------ */
+
+/* The fill colours are tuned to be fills (and the translucent surfaces move
+   the goalposts), so text utilities resolve to the text-safe steps instead.
+   The value flips per scheme through the token, so one rule serves both. */
+[data-visual="pinkneon"] .text-primary { color: var(--pn-text-primary); }
+[data-visual="pinkneon"] .text-success { color: var(--pn-text-success); }
+[data-visual="pinkneon"] .text-warning { color: var(--pn-text-warning); }
+[data-visual="pinkneon"] .text-info { color: var(--pn-text-info); }
+[data-visual="pinkneon"] .text-danger { color: var(--pn-text-danger); }
+
+[data-visual="pinkneon"] [class*="text-green-"] { color: var(--pn-text-success); }
+[data-visual="pinkneon"] [class*="text-red-"] { color: var(--pn-text-danger); }
+[data-visual="pinkneon"] [class*="text-blue-"] { color: var(--pn-text-info); }
+[data-visual="pinkneon"] [class*="text-gray-"] { color: var(--color-text-muted); }
+[data-visual="pinkneon"] [class*="text-brand-"] { color: var(--pn-text-primary); }
+
+/* De-emphasised labels resolve to the subtler-but-legible step. */
+[data-visual="pinkneon"] [class*="text-text-muted/"],
+[data-visual="pinkneon"] [class*="text-text-subtle/"] {
+  color: var(--color-text-subtle);
+}
+
+/* Selection carries the accent — but the base rule paints the selected text
+   with `var(--color-primary)`, which in this look is the SOLID hot pink, so a
+   selected block of text came out pink on pink (2.4:1 light, 3.8:1 dark).
+   Both halves of the pair are owned here, per variant, with measured values:
+   ink on the light wash, near-white on the dark one. */
+[data-visual="pinkneon"] ::selection {
+  background-color: rgba(255, 46, 136, 0.26);
+  color: var(--pn-ink);
+}
+
+[data-visual="pinkneon"].dark ::selection {
+  background-color: rgba(255, 61, 149, 0.30);
+  color: #FFF0F7;
+}
+

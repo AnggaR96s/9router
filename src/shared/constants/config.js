@@ -58,6 +58,12 @@ export const VISUAL_THEMES = [
     hint: "Thick black borders, square corners, hard offset shadows",
     swatch: ["#FFD23F", "#FF6B6B", "#74B9FF", "#000000"],
   },
+  {
+    id: "pinkneon",
+    label: "Pink Neon",
+    hint: "Hot pink glow, frosted glass surfaces, soft depth",
+    swatch: ["#FF2E88", "#0A0210", "#FFB3D4", "#B26BFF"],
+  },
 ];
 
 // Subscription
