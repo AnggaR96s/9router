@@ -54,7 +54,7 @@ function UsageContent() {
           className="w-full sm:w-auto"
         />
         {activeTab === "overview" && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <SegmentedControl
               options={PERIODS}
               value={period}
@@ -66,6 +66,7 @@ function UsageContent() {
               variant="outline"
               size="sm"
               icon="download"
+              className="shrink-0"
               onClick={() => {
                 window.open("/api/usage/history?format=csv", "_blank");
               }}
