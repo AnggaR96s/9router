@@ -1,3 +1,130 @@
+# v0.1.13 (2026-09-17)
+
+## Features
+
+- **OpenCode's free `union-alpha` is served on the endpoint that actually answers it.**
+  The Zen catalog lists the id beside the Chat Completions models, but upstream only
+  serves it on the Anthropic `/zen/v1/messages` endpoint — sent to `/chat/completions`
+  the same id answers 500, which reads like a dead model. The endpoint is now declared by
+  format, the executor picks it by id, and the id is whitelisted as free so the picker
+  offers it. Measured on the anonymous tier: 200 with `cost: "0"`.
+- **Copilot auto model selection.** `auto` is offered in both catalogs, the `/auto`
+  endpoint picks the concrete model (cached per account and session, so a vision request
+  never reuses a non-vision pick), and usage, cost and request-detail rows record the
+  model Copilot resolved instead of a literal "auto". (Ported from Primexz/9router
+  `68d71302`.)
+- **Cline accepts an API key.** A key from the Cline dashboard hits the same
+  `api.cline.bot/api/v1` endpoints as the OAuth token, so only the auth gate needed
+  widening. The static list now holds the free models only (a free connection cannot run
+  the paid ones; they stay importable), the combo modal no longer fans out a catalog
+  request per connection when it opens, and Test Connection probes `/users/me` — Cline's
+  catalog answers 200 to an anonymous request and to any wrong key, which used to report
+  a bad key as valid.
+- **New provider: Atria (Atria Dawn Preview).** OpenAI-compatible at `api.atria-asi.ai`;
+  its `/v1/models` is fully auth-gated, so the catalog is fetched per connection and Test
+  Connection probes it through the registry rather than answering "not supported".
+- **A third visual theme: neubrutalist.** "Theme" used to conflate two axes; the variant
+  (dark/light/system) and the look are now independent, carried by the `dark` class and
+  `data-visual` respectively. The look is a layer in `globals.css` that overrides tokens,
+  so the default entry stays byte-identical for anyone who never opens the picker.
+  Contrast was the real work: `bg-primary text-white` appears 38 times and white on the
+  light palette measured 1.44:1 on yellow, so those fills keep their colour and flip the
+  label to ink (14.5:1).
+- **The visual theme is switchable from the header menu**, showing the active look as a
+  four-colour swatch and expanding into one row per look without closing the menu.
+- **Neubrutalist typography: Montserrat, and no bold.** Headings sit at 500 everywhere
+  instead of 700/800 and the utilities that shouted are capped too, so hierarchy comes
+  from size, borders and colour. Reloads no longer flash the default theme before the
+  saved one applies.
+- **freebuff model assignment uses a modal picker** instead of a native `<select>`, on its
+  own settings card, following the bulk "Apply Proxy" flow so both write paths cannot
+  drift apart.
+- **Dashboard headers for arena, add-ons and error log**, which opened without a title,
+  icon or description while every other page had one; the arena model row also gets a
+  height-less button size so it lines up with its field (42/36 -> 42/42 px, 44/44 with
+  neubrutalist borders).
+
+## Fixes
+
+- **OpenCode's free models work again, and there is nothing to configure.** Zen's
+  anonymous tier began refusing every free model with `403 FreeTierError: OpenCode's free
+  tier can only be used from within OpenCode`. It is a server-side check on who is asking,
+  and the gateway failed both halves of it: a `User-Agent` of plain `opencode` where the
+  client sends a versioned one, and a session id of `ses_` + 32 hex characters where the
+  client mints `ses_` + 6 hex bytes + 14 base62 characters. Session ids are now minted in
+  the client's format — descending, with the monotonic counter the client keeps, and a
+  tail derived from the conversation id so each conversation keeps its own session. The
+  check reads the id's *shape* and nothing else (a random hex prefix passes), so no
+  captured value, environment variable or setting is involved.
+- **Reasoning sent as a bare `delta.reasoning` reaches the client.** Cline (and MiniMax's
+  `reasoning_details[]`) were dropped by a predicate that only knew
+  `reasoning_content`, and those chunks also went uncounted — a stream carrying 400
+  reasoning characters reported `completion_tokens: 1`.
+- **Assistant `reasoning_content` reaches Claude as a thinking block**, ahead of the
+  turn's other blocks, instead of being silently dropped on the way in.
+- **Two distinct requests are no longer collapsed into one usage row.** The dedupe matched
+  on content alone, so two requests landing in the same millisecond with identical token
+  counts lost the second one from `usageHistory` and the daily aggregates. A per-request
+  identity now gates the collapse.
+- **A host without `better-sqlite3` can start again.** Writing inside a transaction on the
+  sql.js adapter always failed with `no-such-savepoint` and rolled the body back,
+  including the initial migration: `db.export()` closes and reopens the connection and
+  discards the open savepoint. The flush is deferred while a transaction is live.
+- **A Windsurf seat account is routed to its own `apiServerUrl`**, which `RegisterUser`
+  returns and the OAuth flow stored while `buildUrl()` ignored it, sending non-default
+  seats to `server.codeium.com` regardless.
+- **Kiro stops dialling hosts that do not exist.** Regionalising every `amazonaws` host
+  produced NXDOMAIN outside `us-east-1` (and `eu-central-1` for Amazon Q), and each dead
+  host cost a 3x3000ms 502 retry walk first: 21.4s end to end for an `eu-west-1`
+  credential against 1.0s for `us-east-1`. Regionalisation now goes through a measured
+  allowlist.
+- **Grok CLI reports the tier the token actually claims.** The access-token fallback was
+  dead code because the billing parse always returns a non-empty plan, filling in a
+  display placeholder when a profile has no subscription tier.
+- **Search and fetch providers can be tested.** `firecrawl` and 13 other API-key providers
+  answered "Provider test not supported"; each now probes its own search or fetch
+  endpoint, with `validateUrl` added for `alitp-intl`, `commandcode`, `mmf`, `qwen` and
+  `vertex-partner`.
+- **Neubrutalist contrast, the switch geometry and light panels are repaired.** The
+  console-log panel stayed an opaque black box on a light theme with log shades at
+  1.6-3.1:1, `text-primary` rendered 1.39:1 as text, and the theme's 3px borders shrank
+  the switch track to 32x16px against a 12px knob.
+- **The neubrutalist press state stays inside its hit area.** It translated the button
+  3px, which moves the hit area with it: presses near the left or top edge released
+  outside and small icon buttons silently ate the first tap. The press now collapses the
+  hard shadow instead.
+- **The dashboard header stays put while scrolling.** The shell was a static `100vh`
+  (the URL bar eats into a mobile viewport, leaving ~100px of scroll range), then
+  `overflow-hidden` made it a non-scrolling scroll box that stranded the sticky header.
+- **Pull-to-refresh works from the page body again**, after `overscroll-contain` stopped
+  the scroll chain before it reached the root.
+- **The provider-models header fits its card on mobile**, where three unwrappable action
+  buttons pushed "Disable All" 18px past the edge and wrapped every label out of its box.
+- **Mobile content stays inside its box**, and gestures reach the page: a missing
+  `min-w-0` let the breadcrumb row grow past the viewport, and Monaco's document-level
+  gesture swallowed swipes and wheels that began over an editor.
+- **The unused basic-chat page is gone**, with its sidebar entry and the layout branches
+  written for it.
+
+## Internal
+
+- **npm publishing runs through GitHub OIDC trusted publishing**, so no long-lived
+  `NPM_TOKEN` is needed, and a dry run now builds and packs the bundle exactly like a
+  release does.
+- **The suite is aligned with current behaviour and green**: 302 files, 2831 tests
+  (17 expected-fail), 60 skipped. The 26 stale files asserted transport, wording and mocks
+  that had moved; three suites whose subject is not in this repo were removed, and
+  `known-fails.txt` is now empty so a stale allowlist cannot wave a regression through.
+- **Four `node:test` files are collected by the repo's vitest runner**, which had counted
+  none of their 39 tests.
+- **The MiMo free channel is recorded as retired upstream**, not renamed: the official
+  Xiaomi CLI ships a free-API sunset constant and hard-fails the model.
+- **Guard tests added** across the release: the free-tier client identity, Copilot auto
+  mode, Cline dual auth and key check, provider test probes, usage dedupe identity, the
+  sql.js driver chain, Kiro endpoint routing, the Windsurf seat host, mobile clipping,
+  the sticky header, the neubrutalist press area, the light console-log panel, the
+  translator thinking block and the reasoning stream path.
+
 # v0.1.12 (2026-09-15)
 
 ## Features
