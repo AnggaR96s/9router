@@ -72,6 +72,7 @@
   --color-text-main: #0a0a0a;
   --color-text-muted: #6B7280;
   --color-text-subtle: #9CA3AF;
+  --color-text-disabled: #4B5563;
 
   /* Status */
   --color-danger: #cf222e;
@@ -127,6 +128,7 @@
   --color-text-main: #ededed;
   --color-text-muted: #9ca3af;
   --color-text-subtle: #6b7280;
+  --color-text-disabled: #A3A9B4;
 
   --color-danger: #ef4444;
   --color-success: #22c55e;
@@ -191,6 +193,7 @@ select {
   --color-text-main: var(--color-text-main);
   --color-text-muted: var(--color-text-muted);
   --color-text-subtle: var(--color-text-subtle);
+  --color-text-disabled: var(--color-text-disabled);
   --color-accent: var(--color-brand-500);
   --color-danger: var(--color-danger);
   --color-success: var(--color-success);
@@ -696,6 +699,7 @@ button:disabled,
   --color-text-main: var(--nb-ink);
   --color-text-muted: #4A4A4A;
   --color-text-subtle: #6B6B6B;
+  --color-text-disabled: #5A5A5A;
 
   /* ---- Accents: neubrutalist palette, including the two hover steps the
           brand scale is referenced with (bg-brand-500 hover:bg-brand-600) ---- */
@@ -777,6 +781,7 @@ button:disabled,
   --color-text-main: #FFFDF5;
   --color-text-muted: #C9C4B4;
   --color-text-subtle: #A39E8E;
+  --color-text-disabled: #B0AB9C;
 
   /* Text-safe accents, inverted for dark surfaces: yellow IS legible as text
      here (it was not on white); the other three are lifted off their fills
@@ -895,6 +900,17 @@ button:disabled,
 [data-visual="neubrutalist"] .bg-success,
 [data-visual="neubrutalist"] .bg-warning {
   color: var(--nb-ink);
+}
+/* A disabled fill keeps a readable label. This ink rule is unlayered, so its
+   (0,2,0) outranks the `disabled:text-*` utility: on the dark variant that put
+   the near-black ink on the muted surface-3 at 1.68:1. Restore the disabled
+   text step for the state instead of letting the fill's ink win. */
+[data-visual="neubrutalist"] button:disabled[class*="bg-brand-"],
+[data-visual="neubrutalist"] button:disabled[class*="bg-red-"],
+[data-visual="neubrutalist"] button:disabled[class*="bg-green-"],
+[data-visual="neubrutalist"] button:disabled[class*="bg-danger"],
+[data-visual="neubrutalist"] button:disabled[class*="bg-success"] {
+  color: var(--color-text-disabled);
 }
 /* NOTE: there is deliberately no ink rule for the translucent variants
    (`bg-primary/10`, `bg-brand-500/5`). A previous rule named a single ink for
@@ -1168,6 +1184,7 @@ button:disabled,
   --color-text-main: #2B0A1C;
   --color-text-muted: #7A4560;
   --color-text-subtle: #8C6377;
+  --color-text-disabled: #6E3C56;
 
   --color-brand-50: #FFF0F6;
   --color-brand-100: #FFDCEC;
@@ -1228,6 +1245,7 @@ button:disabled,
   --color-text-main: #FFEFF7;
   --color-text-muted: #D7AFC4;
   --color-text-subtle: #C39BB1;
+  --color-text-disabled: #D2AEC1;
 
   --color-brand-50: #2B0A22;
   --color-brand-100: #3D0F30;
@@ -1328,6 +1346,13 @@ button:disabled,
   color: var(--pn-ink);
 }
 
+/* Same as the neubrutalist disabled rule: the ink (0,2,0) would otherwise put
+   the near-black pinkneon ink on the muted surface-3 of the dark variant, which
+   measured 1.56:1. Only the classes this theme's ink rule targets are listed. */
+[data-visual="pinkneon"] button:disabled[class*="bg-brand-"] {
+  color: var(--color-text-disabled);
+}
+
 /* An accent fill that carries ink also gets to glow like a neon tube. The
    switch track is the same class (`bg-brand-500` when checked) inside a
    32x16 box, where a glow reads as a halo around a control rather than as
@@ -1374,4 +1399,5 @@ button:disabled,
   background-color: rgba(255, 61, 149, 0.30);
   color: #FFF0F7;
 }
+
 

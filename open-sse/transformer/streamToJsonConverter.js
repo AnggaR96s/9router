@@ -7,6 +7,18 @@
 /**
  * Process a single SSE message and update state accordingly.
  */
+// Terminal events, and the status each one reports. `response.completed` is not
+// the only way a stream ends: an upstream that hits the output cap sends
+// `response.incomplete`, and treating that as "still running" handed a
+// non-streaming client `status: "in_progress"` with an empty `output`.
+const TERMINAL_EVENTS = {
+  "response.completed": "completed",
+  "response.done": "completed",
+  "response.incomplete": "incomplete",
+  "response.failed": "failed",
+  "response.cancelled": "cancelled"
+};
+
 function processSSEMessage(msg, state) {
   if (!msg.trim()) return;
 
@@ -27,15 +39,19 @@ function processSSEMessage(msg, state) {
     state.created = parsed.response?.created_at || state.created;
   } else if (eventType === "response.output_item.done") {
     state.items.set(parsed.output_index ?? 0, parsed.item);
-  } else if (eventType === "response.completed" || eventType === "response.done") {
-    state.status = "completed";
+  } else if (TERMINAL_EVENTS[eventType]) {
+    state.status = TERMINAL_EVENTS[eventType];
+    // The terminal event carries the whole response object, so it is the only
+    // place the answer exists when the stream stopped before any item was
+    // finalised (`output_item.done` never arrived).
+    const finalOutput = parsed.response?.output;
+    if (Array.isArray(finalOutput) && finalOutput.length > 0) state.finalOutput = finalOutput;
+    if (parsed.response?.incomplete_details) state.incompleteDetails = parsed.response.incomplete_details;
     if (parsed.response?.usage) {
       state.usage.input_tokens = parsed.response.usage.input_tokens || 0;
       state.usage.output_tokens = parsed.response.usage.output_tokens || 0;
       state.usage.total_tokens = parsed.response.usage.total_tokens || 0;
     }
-  } else if (eventType === "response.failed") {
-    state.status = "failed";
   }
 }
 
@@ -60,6 +76,8 @@ export async function convertResponsesStreamToJson(stream) {
     created: Math.floor(Date.now() / 1000),
     status: "in_progress",
     usage: { ...EMPTY_RESPONSE },
+    finalOutput: null,
+    incompleteDetails: null,
     items: new Map()
   };
 
@@ -85,14 +103,18 @@ export async function convertResponsesStreamToJson(stream) {
     reader.releaseLock();
   }
 
-  // Build output array from accumulated items (ordered by index)
-  const output = [];
-  const maxIndex = state.items.size > 0 ? Math.max(...state.items.keys()) : -1;
-  for (let i = 0; i <= maxIndex; i++) {
-    output.push(state.items.get(i) || { type: "message", content: [], role: "assistant" });
+  // Build output array: the terminal event wins when it carried one, otherwise
+  // fall back to the items that were finalised (ordered by index).
+  let output = state.finalOutput;
+  if (!output) {
+    output = [];
+    const maxIndex = state.items.size > 0 ? Math.max(...state.items.keys()) : -1;
+    for (let i = 0; i <= maxIndex; i++) {
+      output.push(state.items.get(i) || { type: "message", content: [], role: "assistant" });
+    }
   }
 
-  return {
+  const result = {
     id: state.responseId || `resp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     object: "response",
     created_at: state.created,
@@ -100,4 +122,6 @@ export async function convertResponsesStreamToJson(stream) {
     output,
     usage: state.usage
   };
+  if (state.incompleteDetails) result.incomplete_details = state.incompleteDetails;
+  return result;
 }

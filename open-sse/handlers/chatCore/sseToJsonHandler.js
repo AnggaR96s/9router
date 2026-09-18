@@ -282,7 +282,13 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
         const message = { role: "assistant", content: textContent || (hasToolCalls ? null : "") };
         if (hasToolCalls) message.tool_calls = toolCalls;
         const responseDone = jsonResponse.status === "completed" || jsonResponse.status === "done";
-        const finishReason = hasToolCalls ? "tool_calls" : (responseDone ? "stop" : (jsonResponse.status || "stop"));
+        // A generation that stopped at the output cap is a `length` finish for a
+        // chat client; the provider reports it as an `incomplete` status with a
+        // reason, which is not part of the chat vocabulary.
+        const truncated = jsonResponse.incomplete_details?.reason === "max_output_tokens";
+        const finishReason = hasToolCalls
+          ? "tool_calls"
+          : (responseDone ? "stop" : (truncated ? "length" : (jsonResponse.status || "stop")));
         finalResp = {
           id: jsonResponse.id || `chatcmpl-${Date.now()}`,
           object: "chat.completion",
