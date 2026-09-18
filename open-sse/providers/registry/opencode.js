@@ -18,6 +18,9 @@ export default {
       "x-opencode-client": "desktop",
     },
     noAuth: true,
+    quirks: {
+      forceAutoToolChoiceModels: ["muse-spark-1.3-contributor-free"],
+    },
     // The free tier refuses a non-streaming upstream body with 403, so every
     // request is served as SSE and converted back for clients that asked for JSON.
     forceStream: true,

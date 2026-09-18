@@ -62,11 +62,7 @@ export const OPENCODE_USER_AGENT = `opencode/${OPENCODE_CLIENT_VERSION}`;
 // "ses_" + 32 hex uuid form the gateway used to send. Only the shape matters — the
 // encoded timestamp is NOT verified (a random hex prefix passes), so these ids are
 // minted locally with no captured value.
-export const OPENCODE_ZEN_SESSION_PREFIX = "ses_";
-export const OPENCODE_ZEN_SESSION_TIME_HEX_LEN = 12;
-export const OPENCODE_ZEN_SESSION_TAIL_LEN = 14;
 // The client packs (timestamp_ms << 12 | counter) into 6 bytes, so time is modulo 2**36 ms.
-export const OPENCODE_ZEN_SESSION_COUNTER_BITS = 12;
 
 // Inter-chunk stall timeout (once tokens are flowing). Generous headroom so
 // slow reasoning models aren't aborted mid-stream. Env: STREAM_STALL_TIMEOUT_MS.
