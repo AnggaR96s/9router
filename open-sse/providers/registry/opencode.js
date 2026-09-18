@@ -32,10 +32,6 @@ export default {
     { id: "ling-3.0-flash-fin-free", name: "Ling 3.0 Flash Fin Free" },
     { id: "nemotron-3.5-lightning-free", name: "Nemotron 3.5 Lightning Free" },
     { id: "big-pickle", name: "Big Pickle", isFree: true },
-    // Union Alpha Free is served by the Anthropic /zen/v1/messages endpoint and
-    // answers HTTP 500 on /chat/completions — the format is what selects it.
-    // Live check (2026-09-17): 200 with the anonymous tier headers, cost 0.
-    { id: "union-alpha", name: "Union Alpha Free", isFree: true, targetFormat: "claude" },
   ],
   modelsFetcher: { url: "https://opencode.ai/zen/v1/models", type: "opencode-free" },
   passthroughModels: true,

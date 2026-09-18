@@ -85,13 +85,17 @@ describe("OpenCode free-tier tool fingerprint", () => {
     expect(namesOf(out.tools)).toHaveLength(4);
   });
 
-  it("leaves the quartet out when the endpoint is not a fingerprinted one", () => {
-    // union-alpha is served by the Anthropic /zen/v1/messages endpoint, which the
-    // gate does not fingerprint; injecting OpenAI-shaped declarations there would
-    // send tools the format cannot carry.
-    const out = transform("union-alpha", { messages: [], max_tokens: 16 });
+  it("fingerprints every id the provider serves, registered or passed through", () => {
+    // No id is exempt from the gate: the Anthropic endpoint whose format could not
+    // carry OpenAI-shaped declarations is no longer part of this catalog, and the
+    // id that used to be routed around the gate is fingerprinted like any other.
+    const ids = [...registry.models.map((m) => m.id), "union-alpha"];
 
-    expect(out.tools).toBeUndefined();
+    for (const id of ids) {
+      const out = transform(id, { messages: [], max_tokens: 16 });
+
+      expect(namesOf(out.tools ?? []), id).toEqual(expect.arrayContaining(QUARTET));
+    }
   });
 });
 

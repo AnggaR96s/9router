@@ -6,7 +6,7 @@ import { getThinkingLevels } from "../providers/thinkingLevels.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { createZenSessionId, isClientZenSession } from "../utils/zenSession.js";
-import { isMuseSparkModel, isOpenCodeMessagesModel } from "../providers/models/helpers.js";
+import { isMuseSparkModel } from "../providers/models/helpers.js";
 
 // The free tier only accepts a versioned client UA; a bare "opencode" — which some
 // downstreams send — is rejected, so only a real client version is forwarded. A
@@ -49,12 +49,6 @@ function baseModelId(model) {
 function isResponsesModel(model) {
   const base = baseModelId(model);
   return RESPONSES_MODELS.has(base) || isMuseSparkModel(base);
-}
-
-// Union Alpha Free is only served on the Anthropic endpoint; the catalog lists
-// it beside the Chat Completions ids, so the base URL cannot decide this.
-function isMessagesModel(model) {
-  return isOpenCodeMessagesModel(baseModelId(model));
 }
 
 function declaredToolName(tool) {
@@ -155,15 +149,12 @@ export class OpenCodeExecutor extends BaseExecutor {
       delete body.max_completion_tokens;
       normalizeOpencodeReasoning(model, body);
     }
-    // Union Alpha is served by the Anthropic endpoint, which the gate does not
-    // fingerprint and which cannot carry OpenAI-shaped tool declarations.
-    if (!isMessagesModel(model)) applyFreeTierFingerprint(body, isResponsesModel(model));
+    applyFreeTierFingerprint(body, isResponsesModel(model));
     return injectReasoningContent({ provider: this.provider, model, body });
   }
 
   buildUrl(model) {
     const base = this.config.baseUrl;
-    if (isMessagesModel(model)) return `${base}/zen/v1/messages`;
     return isResponsesModel(model)
       ? `${base}/zen/v1/responses`
       : `${base}/zen/v1/chat/completions`;
