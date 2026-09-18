@@ -3,15 +3,15 @@ import { expandProviderFilter } from "@/lib/db/repos/errorLogsRepo.js";
 
 describe("expandProviderFilter", () => {
   it("resolves display name to canonical id + alias", () => {
-    const set = expandProviderFilter("Freebuff");
-    expect(set).toContain("freebuff");
-    expect(set).toContain("fb");
+    const set = expandProviderFilter("Cursor IDE");
+    expect(set).toContain("cursor");
+    expect(set).toContain("cu");
   });
 
   it("resolves alias back to canonical id", () => {
-    const set = expandProviderFilter("fb");
-    expect(set).toContain("freebuff");
-    expect(set).toContain("fb");
+    const set = expandProviderFilter("cu");
+    expect(set).toContain("cursor");
+    expect(set).toContain("cu");
   });
 
   it("resolves display name with space (Token Harbor)", () => {

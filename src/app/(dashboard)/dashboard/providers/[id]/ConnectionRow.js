@@ -6,7 +6,7 @@ import PropTypes from "prop-types";
 import { Badge, Toggle, Tooltip } from "@/shared/components";
 import CooldownTimer from "./CooldownTimer";
 
-export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMoveUp, onMoveDown, onToggleActive, onUpdateProxy, onEdit, onDelete, oneByOneStatus = null, autoPing = null, modelAssignmentOptions = null, onOpenModelPicker = null, strictModelAssignment = false }) {
+export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMoveUp, onMoveDown, onToggleActive, onUpdateProxy, onEdit, onDelete, oneByOneStatus = null, autoPing = null }) {
   const [showProxyDropdown, setShowProxyDropdown] = useState(false);
   const [updatingProxy, setUpdatingProxy] = useState(false);
   const proxyDropdownRef = useRef(null);
@@ -26,18 +26,6 @@ export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst
   const autoPingTooltip = autoPing?.provider === "codex"
     ? "Auto-starts the next 5h Codex window after reset by sending a tiny gpt-5.5 request. Consumes a small amount of quota."
     : "When your 5h quota runs out, auto-sends a request the moment it resets so a new window starts right away.";
-
-  // The assignment control is a button + modal now, so the row only needs the
-  // current value (to colour itself and to label the trigger) — the option list
-  // itself is rendered by the page-level picker.
-  const modelAssignmentValue = modelAssignmentOptions
-    ? (Object.prototype.hasOwnProperty.call(connection.providerSpecificData || {}, "assignedModel")
-        ? (connection.providerSpecificData.assignedModel || "")
-        : (connection.providerSpecificData?.freebuffModel || ""))
-    : "";
-  const modelAssignmentLabel = modelAssignmentValue
-    ? ((modelAssignmentOptions || []).find((model) => model.id === modelAssignmentValue)?.name || modelAssignmentValue)
-    : "Unassigned";
 
   let maskedProxyUrl = "";
   if (boundProxyPool?.proxyUrl || connection.providerSpecificData?.connectionProxyUrl) {
@@ -257,19 +245,6 @@ export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst
                 </div>
               )}
             </div>
-          )}
-          {modelAssignmentOptions && onOpenModelPicker && (
-            <button
-              onClick={onOpenModelPicker}
-              disabled={!strictModelAssignment}
-              title={strictModelAssignment
-                ? `Model assignment: ${modelAssignmentLabel}`
-                : "Turn on Strict Model Assignment to assign a model"}
-              className={`flex w-full flex-col items-center rounded px-2 py-1 transition-colors hover:bg-black/5 dark:hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent ${modelAssignmentValue ? "text-primary" : "text-text-muted hover:text-primary"}`}
-            >
-              <span className="material-symbols-outlined text-[18px]">hub</span>
-              <span className="max-w-[96px] truncate text-[10px] leading-tight">{modelAssignmentLabel}</span>
-            </button>
           )}
           {autoPing && (
             <Tooltip text={autoPingTooltip}>

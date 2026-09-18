@@ -221,7 +221,6 @@ export async function GET(request, { params }) {
         "codebuddy-intl",
         "qoder",
         "grok-cli",
-        "freebuff",
         "nous",
       ];
       let deviceData;

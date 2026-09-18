@@ -123,16 +123,15 @@ import p112 from "./selfhosted-embedding.js";
 import p113 from "./fish-audio.js";
 import p114 from "./alitp-intl.js";
 import p115 from "./xquik.js";
-import p117 from "./freebuff.js";
-import p118 from "./aihorde.js";
-import p119 from "./bai.js";
-import p120 from "./tokenharbor.js";
-import p121 from "./nous.js";
-import p122 from "./orcarouter.js";
-import p123 from "./apinex.js";
-import p124 from "./qwen.js";
-import p125 from "./unikey.js";
-import p126 from "./atria.js";
+import p117 from "./aihorde.js";
+import p118 from "./bai.js";
+import p119 from "./tokenharbor.js";
+import p120 from "./nous.js";
+import p121 from "./orcarouter.js";
+import p122 from "./apinex.js";
+import p123 from "./qwen.js";
+import p124 from "./unikey.js";
+import p125 from "./atria.js";
 export default [
   p0,
   p1,
@@ -263,5 +262,4 @@ export default [
   p123,
   p124,
   p125,
-  p126,
 ];

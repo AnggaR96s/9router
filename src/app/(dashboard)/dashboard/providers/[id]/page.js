@@ -53,7 +53,6 @@ export default function ProviderDetailPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showEditNodeModal, setShowEditNodeModal] = useState(false);
   const [showBulkProxyModal, setShowBulkProxyModal] = useState(false);
-  const [modelPickerConnectionId, setModelPickerConnectionId] = useState(null);
   const [selectedConnection, setSelectedConnection] = useState(null);
   const [modelAliases, setModelAliases] = useState({});
   const [customModels, setCustomModels] = useState([]);
@@ -66,8 +65,6 @@ export default function ProviderDetailPage() {
   const [bulkProxyPoolId, setBulkProxyPoolId] = useState("__none__");
   const [bulkUpdatingProxy, setBulkUpdatingProxy] = useState(false);
   const [providerStrategy, setProviderStrategy] = useState(null);
-  const [strictModelAssignment, setStrictModelAssignment] = useState(false);
-  const [pacingGapSeconds, setPacingGapSeconds] = useState("");
   const [providerStickyLimit, setProviderStickyLimit] = useState("");
   const [thinkingMode, setThinkingMode] = useState("auto");
   const [autoPing, setAutoPing] = useState({ enabled: false, connections: {} });
@@ -177,16 +174,6 @@ export default function ProviderDetailPage() {
     return levels && levels.includes(thinkingMode) ? thinkingMode : null;
   };
   const providerStorageAlias = isCompatible ? providerId : providerAlias;
-  const assignmentModels = (() => {
-    const byId = new Map();
-    const add = (model) => { if (model?.id && !byId.has(model.id)) byId.set(model.id, model); };
-    models.forEach(add);
-    customModels.forEach((model) => {
-      if (model.providerAlias === providerStorageAlias && (model.kind || model.type || "llm") === "llm") add(model);
-    });
-    const disabled = new Set(disabledModelIds);
-    return [...byId.values()].filter((model) => !disabled.has(model.id));
-  })();
   // Union of levels across this provider's reasoning models — drives the level picker options.
   // Include custom models too (e.g. manually added gpt-5.6-sol → max).
   const providerThinkingLevels = (() => {
@@ -330,13 +317,6 @@ export default function ProviderDetailPage() {
       const override = (settingsData.providerStrategies || {})[providerId] || {};
       setProviderStrategy(override.fallbackStrategy || null);
       setProviderStickyLimit(override.stickyRoundRobinLimit != null ? String(override.stickyRoundRobinLimit) : "1");
-      if (providerId === "freebuff") {
-        setStrictModelAssignment(override.strictModelAssignment === true);
-        // Empty string = "not set" → resolver falls back to the provider default
-        // (20s). Show the stored value, never the effective one, so the field
-        // stays a faithful mirror of what the user actually chose.
-        setPacingGapSeconds(override.pacingGapSeconds != null ? String(override.pacingGapSeconds) : "");
-      }
       // Load per-provider thinking config
       const thinkingCfg = (settingsData.providerThinking || {})[providerId] || {};
       setThinkingMode(thinkingCfg.mode || "auto");
@@ -427,81 +407,6 @@ export default function ProviderDetailPage() {
   const handleStickyLimitChange = (value) => {
     setProviderStickyLimit(value);
     saveProviderStrategy("round-robin", value);
-  };
-
-  // Persist the freebuff pacing gap (seconds). Empty clears the override so the
-  // provider default applies again — that is the "not set" contract the UI
-  // promises, so an emptied field must DELETE the key rather than store 0/NaN.
-  const handlePacingGapChange = async (value, { commit = false } = {}) => {
-    setPacingGapSeconds(value);
-    if (!commit) return;
-    try {
-      const settingsRes = await fetch("/api/settings", { cache: "no-store" });
-      const settingsData = settingsRes.ok ? await settingsRes.json() : {};
-      const current = settingsData.providerStrategies || {};
-      const trimmed = String(value ?? "").trim();
-      const seconds = Number(trimmed);
-      const nextProvider = { ...(current[providerId] || {}) };
-      if (trimmed === "" || !Number.isFinite(seconds) || seconds <= 0) {
-        delete nextProvider.pacingGapSeconds;
-      } else {
-        nextProvider.pacingGapSeconds = seconds;
-      }
-      await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          providerStrategies: { ...current, [providerId]: nextProvider },
-        }),
-      });
-    } catch (error) {
-      console.log("Error saving Freebuff pacing gap:", error);
-    }
-  };
-
-  const handleStrictAssignmentToggle = async (enabled) => {
-    setStrictModelAssignment(enabled);
-    try {
-      const settingsRes = await fetch("/api/settings", { cache: "no-store" });
-      const settingsData = settingsRes.ok ? await settingsRes.json() : {};
-      const current = settingsData.providerStrategies || {};
-      await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ providerStrategies: {
-          ...current,
-          [providerId]: { ...(current[providerId] || {}), strictModelAssignment: enabled },
-        } }),
-      });
-    } catch (error) {
-      console.log("Error saving Freebuff strict assignment:", error);
-    }
-  };
-
-  const handleModelAssignment = async (connectionId, assignedModel) => {
-    try {
-      const res = await fetch(`/api/providers/${connectionId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ providerSpecificData: { assignedModel: assignedModel || null } }),
-      });
-      if (res.ok) {
-        setConnections((prev) => prev.map((connection) => connection.id === connectionId
-          ? { ...connection, providerSpecificData: { ...(connection.providerSpecificData || {}), assignedModel: assignedModel || null } }
-          : connection));
-      }
-    } catch (error) {
-      console.log("Error saving Freebuff model assignment:", error);
-    }
-  };
-
-  // The model picker writes through handleModelAssignment so the row control and
-  // the modal cannot drift apart. Close first so the modal never stays open on
-  // top of the row it just changed.
-  const handleAssignModel = async (assignedModel) => {
-    const connectionId = modelPickerConnectionId;
-    setModelPickerConnectionId(null);
-    if (connectionId) await handleModelAssignment(connectionId, assignedModel);
   };
 
   const saveThinkingConfig = async (mode) => {
@@ -1186,9 +1091,6 @@ export default function ProviderDetailPage() {
                   onToggle: (on) => handleAutoPingConnection(conn.id, on),
                   provider: providerId,
                 } : null}
-                modelAssignmentOptions={providerId === "freebuff" ? assignmentModels : null}
-                onOpenModelPicker={providerId === "freebuff" ? () => setModelPickerConnectionId(conn.id) : null}
-                strictModelAssignment={strictModelAssignment}
                 onUpdateProxy={async (proxyPoolId) => {
                   try {
                     const res = await fetch(`/api/providers/${conn.id}`, {
@@ -1265,55 +1167,6 @@ export default function ProviderDetailPage() {
         {bulkUpdatingProxy && <p className="text-xs text-text-muted">Applying...</p>}
 
         <Button onClick={closeBulkProxyModal} variant="ghost" fullWidth disabled={bulkUpdatingProxy}>
-          Cancel
-        </Button>
-      </div>
-    </Modal>
-  );
-
-  // Assignment options are provider-wide, so the picker only needs to know which
-  // connection is being edited; the current value is read back from that row so
-  // the list can mark it.
-  const modelAssignmentConnection = connections.find((c) => c.id === modelPickerConnectionId) || null;
-  const modelAssignmentValue = modelAssignmentConnection
-    ? (Object.prototype.hasOwnProperty.call(modelAssignmentConnection.providerSpecificData || {}, "assignedModel")
-        ? (modelAssignmentConnection.providerSpecificData.assignedModel || "")
-        : (modelAssignmentConnection.providerSpecificData?.freebuffModel || ""))
-    : "";
-  const modelAssignmentModal = (
-    <Modal
-      isOpen={!!modelPickerConnectionId}
-      onClose={() => setModelPickerConnectionId(null)}
-      title="Assign Model"
-    >
-      <div className="flex flex-col gap-3">
-        <div className="flex max-h-[60vh] flex-col overflow-y-auto">
-          <button
-            onClick={() => handleAssignModel("")}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
-          >
-            <span className="material-symbols-outlined text-[18px] text-text-muted">link_off</span>
-            <span className="text-sm text-text-main">Unassigned</span>
-            {modelAssignmentValue === "" && (
-              <span className="material-symbols-outlined ml-auto text-[16px] text-primary">check</span>
-            )}
-          </button>
-          {assignmentModels.map((model) => (
-            <button
-              key={model.id}
-              onClick={() => handleAssignModel(model.id)}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
-            >
-              <span className="material-symbols-outlined text-[18px] text-text-muted">hub</span>
-              <span className="truncate text-sm text-text-main">{model.name || model.id}</span>
-              {modelAssignmentValue === model.id && (
-                <span className="material-symbols-outlined ml-auto text-[16px] text-primary">check</span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        <Button onClick={() => setModelPickerConnectionId(null)} variant="ghost" fullWidth>
           Cancel
         </Button>
       </div>
@@ -1700,59 +1553,6 @@ export default function ProviderDetailPage() {
         </Card>
       )}
 
-      {/* Freebuff routing settings punya card sendiri: ini ngatur cara akun
-          dipilih buat satu model dan jeda antar request, bukan daftar koneksi. */}
-      {providerId === "freebuff" && (
-        <Card>
-          <h2 className="mb-4 text-lg font-semibold">Freebuff Routing</h2>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-4">
-            <div className="flex flex-1 flex-col gap-1.5 border-b border-border/60 pb-3 sm:border-b-0 sm:border-r sm:pb-0 sm:pr-4">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[16px] text-text-muted">shield</span>
-                <span className="text-xs font-medium text-text-main">Strict Model Assignment</span>
-                <Toggle size="sm" checked={strictModelAssignment} onChange={handleStrictAssignmentToggle} />
-              </div>
-              <p className="text-[10px] leading-relaxed text-text-muted">
-                Only accounts assigned to a model may serve it.
-              </p>
-            </div>
-
-            <div className="flex flex-1 flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-2 text-xs font-medium text-text-main">
-                  <span className="material-symbols-outlined text-[16px] text-text-muted">schedule</span>
-                  Pacing Gap
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    min={1}
-                    value={pacingGapSeconds}
-                    onChange={(e) => handlePacingGapChange(e.target.value)}
-                    onBlur={(e) => handlePacingGapChange(e.target.value, { commit: true })}
-                    placeholder="20"
-                    aria-label="Pacing gap in seconds"
-                    // w-20, not w-16: measured in a real browser, w-16 clips
-                    // its own text at 5 digits (scrollWidth 69 > clientWidth
-                    // 62), so a value like 99999 would render cut off. w-20
-                    // fits every realistic value up to 6 digits with room
-                    // for the stepper.
-                    className="w-20 shrink-0 rounded-md border border-border bg-background px-2 py-1 text-right text-xs tabular-nums focus:border-primary focus:outline-none"
-                  />
-                  <span className="text-xs text-text-muted">sec</span>
-                </div>
-              </div>
-              <p className="text-[10px] leading-relaxed text-text-muted">
-                Minimum idle gap between two requests on one account.{" "}
-                {String(pacingGapSeconds).trim() === "" && (
-                  <span className="rounded bg-primary/10 px-1 py-px font-medium text-primary">default 20s</span>
-                )}
-              </p>
-            </div>
-          </div>
-        </Card>
-      )}
-
       {/* Connections */}
       {isFreeNoAuth ? (
         <NoAuthProxyCard providerId={providerId} />
@@ -2058,7 +1858,6 @@ export default function ProviderDetailPage() {
       </Card>
 
       {bulkActionModal}
-      {modelAssignmentModal}
 
       {/* Modals */}
       {providerId === "kiro" ? (

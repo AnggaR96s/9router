@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getSettings, updateSettings } from "@/lib/localDb";
 import { applyOutboundProxyEnv } from "@/lib/network/outboundProxy";
 import { resetComboRotation } from "open-sse/services/combo.js";
-import { applyFreebuffPacingSettings } from "open-sse/shared/freebuffPacing.js";
 import bcrypt from "bcryptjs";
 
 export const dynamic = "force-dynamic";
@@ -78,13 +77,6 @@ export async function PATCH(request) {
     }
 
     const settings = await updateSettings(body);
-
-    // Apply the freebuff pacing setting immediately (no restart). Mirrors the
-    // outbound-proxy branch below: a value that gates live request scheduling
-    // must take effect on the PATCH that set it, not on the next boot.
-    if (Object.prototype.hasOwnProperty.call(body, "providerStrategies")) {
-      applyFreebuffPacingSettings(settings);
-    }
 
     // Apply outbound proxy settings immediately (no restart required)
     if (

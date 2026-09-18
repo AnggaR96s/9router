@@ -12,7 +12,7 @@ const DEFAULT_MAX_JSON_SIZE = 5 * 1024;
  * Expand a provider filter to every stored representation that could match:
  * canonical id, alias(es), uiAlias, display name, plus the raw input itself
  * (covers custom ids like openai-compatible-chat-<uuid>). Case-insensitive on
- * both sides, so "Freebuff", "fb" and "Token Harbor" all resolve correctly.
+ * both sides, so "Cursor IDE", "cu" and "Token Harbor" all resolve correctly.
  */
 export function expandProviderFilter(input) {
   const raw = String(input == null ? "" : input).trim();

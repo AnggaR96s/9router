@@ -17,7 +17,6 @@ import { getDeepseekUsage } from "./usage/deepseek.js";
 import { getOpenCodeGoUsage } from "./usage/opencode-go.js";
 import { getGroqUsage } from "./usage/groq.js";
 import { getZedUsage } from "./usage/zed.js";
-import { getFreebuffUsage } from "./usage/freebuff.js";
 import { getApinexUsage } from "./usage/apinex.js";
 import { getUnikeyUsage } from "./usage/unikey.js";
 import { resolveQoderCredentials } from "./qoderModels.js";
@@ -63,7 +62,6 @@ const USAGE_HANDLERS = {
   deepseek: (c) => getDeepseekUsage(c.apiKey, c.proxyOptions),
   groq: (c) => getGroqUsage(c.apiKey, c.proxyOptions),
   zed: (c) => getZedUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
-  freebuff: (c) => getFreebuffUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
   apinex: (c) => getApinexUsage(c.apiKey, c.proxyOptions),
   unikey: (c) => getUnikeyUsage(c.apiKey, c.providerSpecificData, c.proxyOptions),
 };

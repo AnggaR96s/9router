@@ -43,7 +43,7 @@ describe("apiKeys backup round-trip", () => {
       usedTokens: 1_234_567,
       resetInterval: "daily",
       lastResetAt: "2026-09-01T00:00:00.000Z",
-      allowedModels: "cbai/*,freebuff/*",
+      allowedModels: "cbai/*,nous/*",
       rpmLimit: 60,
       tpmLimit: 90_000,
       ipWhitelist: "10.0.0.1,10.0.0.2",
@@ -58,7 +58,7 @@ describe("apiKeys backup round-trip", () => {
       id: created.id, key: created.key, name: created.name,
       machineId: created.machineId, isActive: 1, createdAt: created.createdAt,
       tokenLimit: 5_000_000, usedTokens: 1_234_567, resetInterval: "daily",
-      lastResetAt: "2026-09-01T00:00:00.000Z", allowedModels: "cbai/*,freebuff/*",
+      lastResetAt: "2026-09-01T00:00:00.000Z", allowedModels: "cbai/*,nous/*",
       rpmLimit: 60, tpmLimit: 90_000, ipWhitelist: "10.0.0.1,10.0.0.2",
     };
     const exported = repo.apiKeyRowToExport(row);
@@ -75,7 +75,7 @@ describe("apiKeys backup round-trip", () => {
     expect(exported.usedTokens).toBe(1_234_567);
     expect(exported.resetInterval).toBe("daily");
     expect(exported.lastResetAt).toBe("2026-09-01T00:00:00.000Z");
-    expect(exported.allowedModels).toBe("cbai/*,freebuff/*");
+    expect(exported.allowedModels).toBe("cbai/*,nous/*");
     expect(exported.rpmLimit).toBe(60);
     expect(exported.tpmLimit).toBe(90_000);
     expect(exported.ipWhitelist).toBe("10.0.0.1,10.0.0.2");
@@ -121,7 +121,7 @@ describe("apiKeys backup round-trip", () => {
     expect(key.usedTokens).toBe(1_234_567);
     expect(key.resetInterval).toBe("daily");
     expect(key.lastResetAt).toBe("2026-09-01T00:00:00.000Z");
-    expect(key.allowedModels).toBe("cbai/*,freebuff/*");
+    expect(key.allowedModels).toBe("cbai/*,nous/*");
     expect(key.rpmLimit).toBe(60);
     expect(key.tpmLimit).toBe(90_000);
     expect(key.ipWhitelist).toBe("10.0.0.1,10.0.0.2");

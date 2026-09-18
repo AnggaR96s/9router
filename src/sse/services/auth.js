@@ -9,18 +9,6 @@ import * as log from "../utils/logger.js";
 // Mutex to prevent race conditions during account selection
 let selectionMutex = Promise.resolve();
 
-export function filterConnectionsForModel(providerId, connections, model, settings = {}) {
-  const override = (settings.providerStrategies || {})[providerId] || {};
-  if (providerId !== "freebuff" || override.strictModelAssignment !== true || !model) return connections;
-  return connections.filter((connection) => {
-    const data = connection.providerSpecificData || {};
-    const assignedModel = Object.prototype.hasOwnProperty.call(data, "assignedModel")
-      ? data.assignedModel
-      : (providerId === "freebuff" ? data.freebuffModel : null);
-    return assignedModel === model;
-  });
-}
-
 const GITHUB_MONTHLY_USAGE_LIMIT = "you've reached your additional usage limit for your plan";
 
 function githubMonthlyResetMs(status, errorText, provider) {
@@ -85,7 +73,6 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
 
     let connections = await getProviderConnections({ provider: providerId, isActive: true });
     const modelFilterSettings = await getSettings();
-    connections = filterConnectionsForModel(providerId, connections, model, modelFilterSettings);
     log.debug("AUTH", `${provider} | total connections: ${connections.length}, excludeIds: ${excludeSet.size > 0 ? [...excludeSet].join(",") : "none"}, model: ${model || "any"}`);
 
     if (connections.length === 0) {
@@ -275,25 +262,20 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
   } else if (resetsAtMs && resetsAtMs > Date.now()) {
     shouldFallback = true;
     // Antigravity quota API provides exact per-model resetAt. Do not truncate it.
-    // Freebucks exhaustion is likewise a hard stop until the daily Pacific
-    // reset (up to ~24h) — skip the account for the day rather than re-poke it
-    // every 30 min; guard at 26h so a bad server value can't lock forever.
     const providerId = resolveProviderId(provider);
     cooldownMs = providerId === "antigravity"
       ? resetsAtMs - Date.now()
-      : providerId === "freebuff"
-        ? Math.min(resetsAtMs - Date.now(), 26 * 60 * 60 * 1000)
+      : providerId === "tokenharbor"
         // TokenHarbor free tier is a rolling 7-day period — the model is hard-exhausted
         // until the next window. Re-poking every 30min just burns 429s. Guard at 8d so
         // a bad server value can't lock forever.
-        : providerId === "tokenharbor"
-          ? Math.min(resetsAtMs - Date.now(), 8 * 24 * 60 * 60 * 1000)
-          // Cline free tier is a daily allowance ("Daily free limit reached …
-          // Try again in 19h 46m") — hard-exhausted until the ~24h window rolls.
-          // Guard at 26h so a bad server value can't lock the model forever.
-          : providerId === "cline"
-            ? Math.min(resetsAtMs - Date.now(), 26 * 60 * 60 * 1000)
-            : Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS);
+        ? Math.min(resetsAtMs - Date.now(), 8 * 24 * 60 * 60 * 1000)
+        // Cline free tier is a daily allowance ("Daily free limit reached …
+        // Try again in 19h 46m") — hard-exhausted until the ~24h window rolls.
+        // Guard at 26h so a bad server value can't lock the model forever.
+        : providerId === "cline"
+          ? Math.min(resetsAtMs - Date.now(), 26 * 60 * 60 * 1000)
+          : Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS);
     newBackoffLevel = 0;
   } else {
     ({ shouldFallback, cooldownMs, newBackoffLevel } = checkFallbackError(status, errorText, backoffLevel));
@@ -317,11 +299,7 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
   const connName = conn?.displayName || conn?.name || conn?.email || connectionId.slice(0, 8);
   log.warn("AUTH", `${connName} locked ${lockKey} for ${Math.round(cooldownMs / 1000)}s [${status}]`);
 
-  // Pacing rejects (429 "Freebuff pacing") are expected control-flow — the
-  // bounded wait retries the same account. Skip the loud ❌ line for those;
-  // the [AUTH] lock warn above already covers it. Real errors still log.
-  const isPacingSkip = status === 429 && /Freebuff pacing/i.test(reason);
-  if (provider && status && reason && !isPacingSkip) {
+  if (provider && status && reason) {
     console.error(`❌ ${provider} [${status}]: ${reason}`);
   }
 

@@ -10,7 +10,6 @@ const baseline = JSON.parse(readFileSync(join(here, "providers-baseline.json"), 
 
 // Fields intentionally added during refactor (verified by dedicated runtime tests, not byte-baseline).
 // authUrl: removed dead field (qwen/iflow) — no consumer reads config.authUrl (oauth block has authorize/deviceCode)
-// pacing: new freebuff request-gap config, read by shared/freebuffPacing.js (covered by freebuff-pacing.test.js).
 const ADDED_FIELDS = new Set(["forceStream", "urlSuffix", "retry", "quirks", "auth", "validateUrl", "usage", "clientId", "clientSecret", "tokenUrl", "cliVersion", "apiClient", "copilot", "authorizeUrl", "authUrl", "regions", "defaultRegion", "reasoningInject", "priority", "hasFree", "pacing"]);
 
 // Normalize via JSON roundtrip so function/undefined are dropped identically; drop added/removed fields.

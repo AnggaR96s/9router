@@ -386,29 +386,6 @@
     "validateUrl": "https://api.fireworks.ai/inference/v1/models",
     "format": "openai"
   },
-  "freebuff": {
-    "baseUrl": "https://www.codebuff.com/api/v1/chat/completions",
-    "format": "openai",
-    "headers": {
-      "User-Agent": "Bun/1.3.14"
-    },
-    "retry": {
-      "429": {
-        "attempts": 2,
-        "delayMs": 2000
-      },
-      "503": {
-        "attempts": 2,
-        "delayMs": 1500
-      }
-    },
-    "usage": {
-      "url": "https://www.codebuff.com/api/v1/freebuff/session"
-    },
-    "pacing": {
-      "gapSeconds": 20
-    }
-  },
   "gemini-cli": {
     "baseUrl": "https://cloudcode-pa.googleapis.com/v1internal",
     "format": "gemini-cli",
