@@ -3,13 +3,21 @@
  * Trims old conversation messages while preserving System prompts and recent turns.
  */
 
-function trimLeadingOrphans(msgs) {
-  // After slicing to the newest N messages, the window may open with a `tool`
-  // result whose assistant tool_calls was pruned away — drop orphans so the
-  // upstream conversation stays valid.
-  const firstValid = msgs.findIndex((m) => m.role !== "tool");
-  return firstValid > 0 ? msgs.slice(firstValid) : msgs;
+// A pruned window must stay valid for its wire format. Cutting to the newest N
+// entries can otherwise leave the window opening on an entry whose counterpart
+// was dropped (tool result without tool_calls, function_call_output without
+// function_call, Gemini functionResponse without functionCall) or on a turn the
+// provider rejects as the first entry (Gemini requires a user turn first).
+function trimInvalidHead(items, isInvalid) {
+  let i = 0;
+  while (i < items.length - 1 && isInvalid(items[i])) i++;
+  return i > 0 ? items.slice(i) : items;
 }
+
+const isValidMessagesHead = (m) => m.role !== "tool";
+const isValidInputHead = (it) => it.type !== "function_call_output" && it.type !== "custom_tool_call_output";
+const isValidContentsHead = (c) =>
+  c.role === "user" && !(c.parts || []).some((p) => p && p.functionResponse);
 
 export function pruneContextMessages(body, limit = 20) {
   if (!body || typeof body !== "object") return;
@@ -22,7 +30,7 @@ export function pruneContextMessages(body, limit = 20) {
 
     if (nonSystemMsgs.length > maxKeep) {
       const keptNonSystem = nonSystemMsgs.slice(-maxKeep);
-      body.messages = [...systemMsgs, ...trimLeadingOrphans(keptNonSystem)];
+      body.messages = [...systemMsgs, ...trimInvalidHead(keptNonSystem, (m) => !isValidMessagesHead(m))];
     }
   }
 
@@ -33,12 +41,12 @@ export function pruneContextMessages(body, limit = 20) {
 
     if (nonSystemInputs.length > maxKeep) {
       const keptNonSystem = nonSystemInputs.slice(-maxKeep);
-      body.input = [...systemInputs, ...trimLeadingOrphans(keptNonSystem)];
+      body.input = [...systemInputs, ...trimInvalidHead(keptNonSystem, (it) => !isValidInputHead(it))];
     }
   }
 
   // Gemini format: body.contents
   if (Array.isArray(body.contents) && body.contents.length > maxKeep) {
-    body.contents = body.contents.slice(-maxKeep);
+    body.contents = trimInvalidHead(body.contents.slice(-maxKeep), (c) => !isValidContentsHead(c));
   }
 }
