@@ -312,6 +312,20 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
     expect(chatFull.tools[0].function.description).toBe("existing");
   });
 
+  it("cloaks the responses path too when the client sends its own tools", () => {
+    // The free tier still verifies that bash and read are on the wire once the caller
+    // advertises tools of its own — dropping the decoys here answered 403 FreeTierError.
+    const executor = getExecutor("opencode");
+    const out = executor.transformRequest("muse-spark-1.3-contributor-free", {
+      input: [{ type: "message", role: "user", content: [{ type: "input_text", text: "hi" }] }],
+      tools: [{ type: "function", name: "get_weather", parameters: { type: "object", properties: {} } }],
+    });
+    const names = out.tools.map((t) => t.name);
+    expect(names).toContain("get_weather");
+    expect(names).toContain("bash");
+    expect(names).toContain("read");
+  });
+
   it("declares forceStream on the opencode transport so chatCore serves SSE upstream", async () => {
     const { PROVIDERS } = await import("../../open-sse/config/providers.js");
     expect(PROVIDERS.opencode?.forceStream).toBe(true);
