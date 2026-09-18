@@ -14,7 +14,35 @@ function trimInvalidHead(items, isInvalid) {
   return i > 0 ? items.slice(i) : items;
 }
 
-const isValidMessagesHead = (m) => m.role !== "tool";
+// Claude-format messages carry their tool calls as content blocks, so the OpenAI
+// `tool` role check misses them: a window opening on a `tool_result` whose
+// `tool_use` was pruned, or on an assistant turn, is rejected by Anthropic-format
+// providers (unexpected tool_use_id / first message must use the user role).
+// A tool_result at the head always refers to a tool_use outside the window, so it
+// can be dropped while the rest of the entry (e.g. its text) stays.
+// Returns the repaired entry, or null when the whole entry must go.
+function healMessagesHead(m) {
+  if (m.role === "tool") return null;
+  if (!Array.isArray(m.content)) return m;
+  if (m.role !== "user") return null;
+  const kept = m.content.filter((p) => p?.type !== "tool_result");
+  if (kept.length === m.content.length) return m;
+  return kept.length ? { ...m, content: kept } : null;
+}
+
+function trimMessagesHead(items) {
+  let i = 0;
+  while (i < items.length - 1) {
+    const healed = healMessagesHead(items[i]);
+    if (healed === null) {
+      i++;
+      continue;
+    }
+    return healed === items[i] ? items.slice(i) : [healed, ...items.slice(i + 1)];
+  }
+  return items.slice(i);
+}
+
 const isValidInputHead = (it) => it.type !== "function_call_output" && it.type !== "custom_tool_call_output";
 
 // Gemini contents cannot be repaired by dropping the head turn: in the shape the
@@ -45,7 +73,7 @@ export function pruneContextMessages(body, limit = 20) {
 
     if (nonSystemMsgs.length > maxKeep) {
       const keptNonSystem = nonSystemMsgs.slice(-maxKeep);
-      body.messages = [...systemMsgs, ...trimInvalidHead(keptNonSystem, (m) => !isValidMessagesHead(m))];
+      body.messages = [...systemMsgs, ...trimMessagesHead(keptNonSystem)];
     }
   }
 
