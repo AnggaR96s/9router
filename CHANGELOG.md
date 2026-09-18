@@ -1,3 +1,82 @@
+# v0.1.14 (2026-09-18)
+
+## Features
+
+- **A System Status page.** Host, application and storage telemetry with its own API
+  route, wired into the sidebar. The phone then exposed the rest: empty top bars on
+  `system-status` and `pxpipe` (no branch in the route map, which now lives in a
+  JSX-free module so it can be unit tested), the storage total squeezed beside the DB
+  path and the path escaping its card, the GC message rendered inside the title row
+  (it gets its own line, and Run GC is disabled when the runtime lacks `--expose-gc`),
+  the tab strip clipped by the shell, and the proxy pool's `lastError` escaping its card.
+- **A fourth look: pink neon.** Hot-pink accents on frosted surfaces with a soft aurora
+  on the shell instead of hard-edged depth. A registry entry plus a scoped token block
+  is all it takes — the bootstrap script and the header picker stay generic, so adding
+  a look needs no component change. Solid accent fills take ink labels (white on the
+  hot pink measures 3.3:1) and selection colours are owned per variant, because the
+  base rule paints selected text with `--color-primary` — the solid hot pink here.
+
+## Fixes
+
+- **OpenCode's free tier accepts a plain chat caller again.** Zen's anonymous tier
+  refuses a request that carries none of the client's file-search tools, or a
+  non-streaming body, with `403 FreeTierError` however well the headers and session
+  id match — the versioned `User-Agent` and session shape alone were not enough. The
+  missing `{bash,glob,grep,read}` declarations are now merged into the caller's own
+  tools (left untouched where it declared its own), flat on `/zen/v1/responses` and
+  nested under `function` on `/zen/v1/chat/completions`, since the wrong shape is
+  answered with a 400 rather than a gate error. Streaming is forced upstream and the
+  provider is marked `forceStream`, so a JSON caller still reaches the model.
+- **Context pruning leaves the window valid for the provider's wire format.** The
+  gate compared against `maxKeep + 1`, so a conversation could stay one entry over
+  the limit; the head of a pruned window could also open on an entry whose
+  counterpart was cut away. Fixed for every shape the body can be in: the OpenAI
+  `tool` role, the Responses `function_call_output`, the Cloud Code envelope
+  (`request.contents`, which the check never looked at, so gemini-cli and antigravity
+  requests were never pruned at all), and the Gemini window that opened on a
+  `functionResponse`. A pruned head is repaired instead of only dropped — the
+  orphaned block goes and the rest of the entry (its text) stays.
+- **The pruned window is valid for claude-format providers too.** Anthropic-shaped
+  messages carry their tool calls as content blocks, so the OpenAI `tool` role check
+  never matched them and the window could still open on a `tool_result` whose
+  `tool_use` was pruned, or on an assistant turn — both rejected upstream
+  (`unexpected tool_use_id`, first message must use the `user` role). Sweeping
+  conversation length against the limit found 51 invalid windows out of 160
+  combinations; that count is now zero.
+- **A truncated run says so.** `/v1/responses` reported `in_progress` for every
+  response, including a run the provider cut short, and the chat-completions path
+  turned the same truncation into non-chat vocabulary. The converter now reads the
+  terminal event (`response.completed` / `incomplete` / `failed` / `cancelled`) and
+  reports the real status with its reason, taking `output` from that event as
+  authoritative; a chat client asking for a JSON body gets `finish_reason: "length"`.
+- **Disabled controls are readable again.** `disabled:opacity-50` on the button base
+  class composited the label *and* its fill together, so a disabled chip carrying
+  information — the proxy pool's `Checking 3/7` — measured 1.25:1 against its own
+  background. There is now a `--color-text-disabled` token per theme, applied per
+  variant (also to `ghost` and `outline`, which had no disabled colour at all and
+  looked active), plus a theme-scoped rule for solid fills, since the theme's ink rule
+  outranks the Tailwind utility. Every disabled sample measures at least 4.82:1.
+- **The proxy pool's health check is readable while it runs.** The progress label no
+  longer renders as a dimmed button, so `Checking n/m` can be read instead of guessed.
+- **Copilot's `auto` survives a capability filter.** The picker reads capabilities per
+  listed id, and `auto` is the row a user picks precisely when they do not want to
+  choose a model — yet nothing in the fallback layers can describe the model behind
+  it, since that is resolved per account and per request. The entry is written by hand
+  and keyed like the rest of `PROVIDER_CAPABILITIES` (registry ids, whose aliases are
+  `cx`/`kr`/`qd`).
+- **A retired free channel is gone.** Xiaomi sunset the anonymous free MiMo channel,
+  so `mmf` and `mimo-free` only advertised a model no upstream serves; they now fail
+  locally instead of forwarding a request that comes back 400.
+- **The build compiles without warnings.** `src/lib/localDb.js` forwarded nine names
+  that left `src/lib/db/index.js` when that layer was rewritten, and webpack reported
+  each one — 18 log lines on every build, all from that file. The shim now forwards
+  exactly what the barrel exports, and a test diffs the two lists and scans every
+  importer before the build.
+- **The usage export button label stays inside its box.** The period selector is full
+  width on mobile, so the button beside it was squeezed below its content width and
+  its label wrapped out of the fixed-height box. Labels never wrap now, and the
+  selector — which scrolls internally — gives way instead.
+
 # v0.1.13 (2026-09-17)
 
 ## Features

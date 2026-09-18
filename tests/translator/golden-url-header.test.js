@@ -2,6 +2,7 @@
 // Sinh snapshot lần đầu (baseline) → sau refactor chạy lại phải khớp y hệt.
 // Mock proxyFetch + uuid-heavy executors KHÔNG cần ở đây vì chỉ gọi buildUrl/buildHeaders (pure).
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import { PROVIDERS } from "../../open-sse/config/providers.js";
 import { DefaultExecutor } from "../../open-sse/executors/default.js";
 
@@ -23,14 +24,22 @@ const SPECIALIZED = new Set([
   "xiaomi-tokenplan",
 ]);
 
+// Phiên bản app nằm trong header on-wire (User-Agent: 9Router/<ver>,
+// X-CLIENT-VERSION, X-CORE-VERSION, X-Msh-Version). Nó đổi mỗi lần bump, nên bị
+// trung hoà ở đây — TAY CHỈ giá trị ĐÚNG BẰNG package.json, để một phiên bản sai
+// (nilai fallback "0.0.0", header kosong, User-Agent tanpa versi) tetap MERAH.
+const PKG_VERSION = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version;
+const neutralizeVersion = (s) =>
+  s.replaceAll(`9Router/${PKG_VERSION}`, "9Router/<VER>").split(PKG_VERSION).join("<VER>");
+
 // Sanitize header: khử token + field thời gian động (kimi X-Msh-Device-Id) để snapshot ổn định.
 function sanitize(headers) {
   const out = {};
   for (const [k, v] of Object.entries(headers)) {
     out[k] = typeof v === "string"
-      ? v.replace(/Bearer .+/, "Bearer <TOK>")
-          .replace(/sk-test-APIKEY|tok-test-ACCESS/g, "<CRED>")
-          .replace(/kimi-\d{10,}/g, "kimi-<TS>")
+      ? neutralizeVersion(v.replace(/Bearer .+/, "Bearer <TOK>")
+          .replace(/«redacted:sk-…»|tok-test-ACCESS/g, "<CRED>")
+          .replace(/kimi-\d{10,}/g, "kimi-<TS>"))
       : v;
   }
   return out;

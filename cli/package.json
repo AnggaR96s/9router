@@ -1,6 +1,6 @@
 {
   "name": "nggrouter",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "9Router CLI - Start and manage 9Router server (AnggaR96s fork)",
   "bin": {
     "9router": "./cli.js",
@@ -42,6 +42,14 @@
     "api"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AnggaR96s/9router"
+  },
+  "homepage": "https://github.com/AnggaR96s/9router",
+  "bugs": {
+    "url": "https://github.com/AnggaR96s/9router/issues"
+  },
   "devDependencies": {
     "esbuild": "^0.25.12",
     "nodemon": "^3.1.14"
