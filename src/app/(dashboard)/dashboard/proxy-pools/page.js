@@ -660,14 +660,26 @@ export default function ProxyPoolsPage() {
               {selectedIds.length > 0 ? `${selectedIds.length} selected` : "All pools"}
             </span>
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                icon={healthChecking ? "progress_activity" : "health_and_safety"}
-                onClick={handleHealthCheck}
-                disabled={healthChecking || bulkBusy || proxyPools.length === 0}
-              >
-                {healthChecking ? `Checking ${healthProgress.current}/${healthProgress.total}` : "Health Check"}
-              </Button>
+              {healthChecking ? (
+                // A progress readout, not an inactive control: as a disabled primary
+                // Button this label lost to `disabled:opacity-50` and to the theme
+                // rules keyed on `.bg-brand-500` (neubrutalist/pinkneon), measuring
+                // 1.25:1-3.51:1 across the six theme combinations. Its own surface
+                // pair stays legible everywhere and keeps the busy state visible.
+                <span className="inline-flex h-7 items-center justify-center gap-2 whitespace-nowrap rounded-[8px] bg-surface-3 px-3 text-xs font-semibold text-text-main">
+                  <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+                  Checking {healthProgress.current}/{healthProgress.total}
+                </span>
+              ) : (
+                <Button
+                  size="sm"
+                  icon="health_and_safety"
+                  onClick={handleHealthCheck}
+                  disabled={bulkBusy || proxyPools.length === 0}
+                >
+                  Health Check
+                </Button>
+              )}
               {selectedIds.length > 0 && (
                 <>
                   <Button size="sm" variant="secondary" icon="toggle_on" onClick={() => bulkSetActive(true)} disabled={bulkBusy || healthChecking}>
