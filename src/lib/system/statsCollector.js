@@ -7,10 +7,13 @@ import { DATA_DIR } from "@/lib/dataDir.js";
 import { DATA_FILE } from "@/lib/db/paths.js";
 import { getAdapter } from "@/lib/db/driver.js";
 
-// Event loop delay monitor with 20ms resolution
+// Event loop delay monitor. The resolution is also the baseline of every
+// bucket the histogram reports, so the constant is the single source of truth
+// for both the sampler and the conversion in getEventLoopMetrics().
+const EVENT_LOOP_RESOLUTION_MS = 20;
 let eventLoopHistogram = null;
 try {
-  eventLoopHistogram = monitorEventLoopDelay({ resolution: 20 });
+  eventLoopHistogram = monitorEventLoopDelay({ resolution: EVENT_LOOP_RESOLUTION_MS });
   eventLoopHistogram.enable();
 } catch {
   eventLoopHistogram = null;
@@ -92,6 +95,19 @@ function calculateCpuDiff() {
   };
 }
 
+// monitorEventLoopDelay records the interval between its own ticks, so every
+// bucket it reports carries the sampling resolution on top of the real delay.
+// The page prints these as event loop lag, so the resolution has to come back
+// out: a healthy 20ms tick means ~0 lag, and a stall keeps its true size.
+function toLagMs(ns) {
+  // An empty histogram reports Int64 max for min/max, which is not a safe
+  // integer: that is "no sample yet", not a 9.2e12 ms spike. Real stalls stay
+  // safe integers, so none of them get swallowed.
+  if (!Number.isSafeInteger(ns) || ns <= 0) return 0;
+  const lagMs = ns / 1e6 - EVENT_LOOP_RESOLUTION_MS;
+  return lagMs > 0 ? Math.round(lagMs * 100) / 100 : 0;
+}
+
 function getEventLoopMetrics() {
   if (!eventLoopHistogram) {
     return {
@@ -105,19 +121,14 @@ function getEventLoopMetrics() {
     };
   }
 
-  const toMs = (ns) => {
-    if (!Number.isFinite(ns) || ns <= 0 || ns >= 1e11) return 0;
-    return Math.round((ns / 1e6) * 100) / 100;
-  };
-
   return {
-    meanMs: toMs(eventLoopHistogram.mean),
-    p50Ms: toMs(eventLoopHistogram.percentile(50)),
-    p90Ms: toMs(eventLoopHistogram.percentile(90)),
-    p95Ms: toMs(eventLoopHistogram.percentile(95)),
-    p99Ms: toMs(eventLoopHistogram.percentile(99)),
-    maxMs: toMs(eventLoopHistogram.max),
-    minMs: toMs(eventLoopHistogram.min),
+    meanMs: toLagMs(eventLoopHistogram.mean),
+    p50Ms: toLagMs(eventLoopHistogram.percentile(50)),
+    p90Ms: toLagMs(eventLoopHistogram.percentile(90)),
+    p95Ms: toLagMs(eventLoopHistogram.percentile(95)),
+    p99Ms: toLagMs(eventLoopHistogram.percentile(99)),
+    maxMs: toLagMs(eventLoopHistogram.max),
+    minMs: toLagMs(eventLoopHistogram.min),
   };
 }
 
@@ -341,3 +352,5 @@ export async function getSystemTelemetry() {
     storage,
   };
 }
+
+export const __test__ = { toLagMs, EVENT_LOOP_RESOLUTION_MS };
