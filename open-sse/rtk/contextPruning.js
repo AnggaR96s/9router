@@ -3,11 +3,11 @@
  * Trims old conversation messages while preserving System prompts and recent turns.
  */
 
-// A pruned window must stay valid for its wire format. Cutting to the newest N
-// entries can otherwise leave the window opening on an entry whose counterpart
-// was dropped (tool result without tool_calls, function_call_output without
-// function_call, Gemini functionResponse without functionCall) or on a turn the
-// provider rejects as the first entry (Gemini requires a user turn first).
+// A pruned window must stay valid for its wire format, otherwise the provider
+// rejects the request. Cutting to the newest N entries can leave the window head
+// on an entry whose counterpart was pruned (a tool result without its tool_calls,
+// a function_call_output without its function_call) or on a turn the provider
+// refuses as the first entry (Gemini needs a user turn first).
 function trimInvalidHead(items, isInvalid) {
   let i = 0;
   while (i < items.length - 1 && isInvalid(items[i])) i++;
@@ -16,8 +16,23 @@ function trimInvalidHead(items, isInvalid) {
 
 const isValidMessagesHead = (m) => m.role !== "tool";
 const isValidInputHead = (it) => it.type !== "function_call_output" && it.type !== "custom_tool_call_output";
-const isValidContentsHead = (c) =>
-  c.role === "user" && !(c.parts || []).some((p) => p && p.functionResponse);
+
+// Gemini contents cannot be repaired by dropping the head turn: in the shape the
+// translator builds ([user][model+functionCall][user+functionResponse] per round)
+// every heal-by-dropping step orphans the next turn's result and the window
+// collapses to a single entry. Drop only model-first turns, and keep the tool
+// results out of the head turn — they belong to the boundary being pruned anyway.
+function pruneContents(contents, maxKeep) {
+  let kept = contents.slice(Math.max(0, contents.length - maxKeep));
+  while (kept.length > 1 && kept[0]?.role !== "user") kept = kept.slice(1);
+  const head = kept[0];
+  if (!head || head.role !== "user") return kept;
+
+  const parts = head.parts || [];
+  if (!parts.some((p) => p && p.functionResponse)) return kept;
+  const keptParts = parts.filter((p) => !(p && p.functionResponse));
+  return [{ ...head, parts: keptParts.length ? keptParts : [{ text: "..." }] }, ...kept.slice(1)];
+}
 
 export function pruneContextMessages(body, limit = 20) {
   if (!body || typeof body !== "object") return;
@@ -45,8 +60,15 @@ export function pruneContextMessages(body, limit = 20) {
     }
   }
 
-  // Gemini format: body.contents
-  if (Array.isArray(body.contents) && body.contents.length > maxKeep) {
-    body.contents = trimInvalidHead(body.contents.slice(-maxKeep), (c) => !isValidContentsHead(c));
+  // Gemini format: body.contents, or the Cloud Code envelope
+  // ({ project, model, request: { contents } }) that gemini-cli and antigravity
+  // send — the translator wraps contents before pruning runs.
+  const gemini = Array.isArray(body.contents)
+    ? body
+    : Array.isArray(body.request?.contents)
+      ? body.request
+      : null;
+  if (gemini && gemini.contents.length > maxKeep) {
+    gemini.contents = pruneContents(gemini.contents, maxKeep);
   }
 }
