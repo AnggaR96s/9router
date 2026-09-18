@@ -18,6 +18,9 @@ export default {
       "x-opencode-client": "desktop",
     },
     noAuth: true,
+    // The free tier refuses a non-streaming upstream body with 403, so every
+    // request is served as SSE and converted back for clients that asked for JSON.
+    forceStream: true,
   },
   models: [
     // Muse Spark models are served by /zen/v1/responses; the rest stay on

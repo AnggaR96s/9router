@@ -9,13 +9,29 @@ import { createZenSessionId, isClientZenSession } from "../utils/zenSession.js";
 import { isMuseSparkModel, isOpenCodeMessagesModel } from "../providers/models/helpers.js";
 
 // The free tier only accepts a versioned client UA; a bare "opencode" — which some
-// downstreams send — is rejected, so only a real client version is forwarded.
-const CLIENT_UA_RE = /^opencode\/\d+\.\d+/i;
+// downstreams send — is rejected, so only a real client version is forwarded. A
+// version below the gate's floor is refused too, with a different status
+// (426 UpgradeRequired on "opencode/1.0.0"), so it is replaced as well.
+const CLIENT_UA_RE = /^opencode\/(\d+)\.(\d+)(?:\.|$)/i;
+const MIN_CLIENT_UA_MAJOR = 1;
+const MIN_CLIENT_UA_MINOR = 17;
+
+function isSupportedClientUa(ua) {
+  const m = String(ua || "").match(CLIENT_UA_RE);
+  if (!m) return false;
+  const major = Number(m[1]);
+  const minor = Number(m[2]);
+  if (major !== MIN_CLIENT_UA_MAJOR) return major > MIN_CLIENT_UA_MAJOR;
+  return minor >= MIN_CLIENT_UA_MINOR;
+}
 // Models served by /zen/v1/responses; every other model stays on /chat/completions.
 const RESPONSES_MODELS = new Set([
   "muse-spark-1.2-contributor-free",
   "muse-spark-1.3-contributor-free",
 ]);
+// The tier fingerprints the official agentic client's file-search tools: a request
+// with matching headers and session but none of these still answers 403.
+const FINGERPRINT_TOOLS = ["bash", "glob", "grep", "read"];
 
 function generateRequestId() {
   return `msg_${crypto.randomUUID().replace(/-/g, "")}`;
@@ -39,6 +55,40 @@ function isResponsesModel(model) {
 // it beside the Chat Completions ids, so the base URL cannot decide this.
 function isMessagesModel(model) {
   return isOpenCodeMessagesModel(baseModelId(model));
+}
+
+function declaredToolName(tool) {
+  if (!tool || typeof tool !== "object") return "";
+  const nested = tool.function?.name;
+  if (typeof nested === "string") return nested.trim();
+  return typeof tool.name === "string" ? tool.name.trim() : "";
+}
+
+/**
+ * Merge the file-search quartet into the caller's tools and make the upstream body
+ * stream. Both are fingerprint axes of the anonymous tier: three or fewer quartet
+ * tools, or stream:false, answer 403 however well the headers match. Tools the caller
+ * declared itself are kept untouched — only the missing names are appended.
+ *
+ * `flat` picks the declaration shape: the Responses endpoint takes the name at the
+ * top level while chat/completions nests it under `function`. The wrong shape is a
+ * 400 invalid_request_error, not a gate error, so the endpoint decides, not the input.
+ */
+function applyFreeTierFingerprint(body, flat) {
+  const tools = Array.isArray(body.tools) ? [...body.tools] : [];
+  const present = new Set(tools.map(declaredToolName).filter(Boolean));
+  for (const name of FINGERPRINT_TOOLS) {
+    if (present.has(name)) continue;
+    const declaration = {
+      name,
+      description: `OpenCode built-in ${name} tool`,
+      parameters: { type: "object", properties: {} },
+    };
+    tools.push(flat ? { type: "function", ...declaration } : { type: "function", function: declaration });
+    present.add(name);
+  }
+  body.tools = tools;
+  body.stream = true;
 }
 
 function resolveOpencodeSession(body, credentials) {
@@ -105,6 +155,9 @@ export class OpenCodeExecutor extends BaseExecutor {
       delete body.max_completion_tokens;
       normalizeOpencodeReasoning(model, body);
     }
+    // Union Alpha is served by the Anthropic endpoint, which the gate does not
+    // fingerprint and which cannot carry OpenAI-shaped tool declarations.
+    if (!isMessagesModel(model)) applyFreeTierFingerprint(body, isResponsesModel(model));
     return injectReasoningContent({ provider: this.provider, model, body });
   }
 
@@ -122,7 +175,7 @@ export class OpenCodeExecutor extends BaseExecutor {
     for (const [k, v] of Object.entries(raw)) lower[k.toLowerCase()] = v;
 
     const downstreamUa = String(lower["user-agent"] || "").trim();
-    const isClientUa = CLIENT_UA_RE.test(downstreamUa);
+    const isClientUa = isSupportedClientUa(downstreamUa);
 
     return {
       "Content-Type": "application/json",
