@@ -5,6 +5,7 @@ import PropTypes from "prop-types";
 import { Modal, Button, Input } from "@/shared/components";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { createSuccessHandoff } from "@/shared/utils/oauthSuccessHandoff";
+import { needsManualCallbackPaste } from "@/shared/utils/oauthCallbackReach";
 
 // Providers using the dynamic-port local callback proxy.
 // Browser OAuth: popup → auto callback → auto exchange → poll-status.
@@ -52,6 +53,9 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
   // trae/windsurf: choose between browser OAuth (proxy) and paste-token (import)
   const [authMode, setAuthMode] = useState("browser"); // "browser" | "paste-token"
   const [pasteToken, setPasteToken] = useState("");
+  // Proxy flows whose loopback callback cannot reach this server from the browser being used
+  // (remote dashboard): the user must paste the callback URL to finish.
+  const [manualCallbackRequired, setManualCallbackRequired] = useState(false);
   const [ideStatus, setIdeStatus] = useState(null);
   const popupRef = useRef(null);
   const pollingAbortRef = useRef(false);
@@ -236,6 +240,16 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
     flowRef.current.proxyStarted = true;
     flowRef.current.proxyProvider = providerId;
     flowRef.current.stopSent = false;
+    // The callback URL is loopback by construction. When the dashboard is reached from another
+    // host (a tunnel, a LAN address, a remote box) the browser's redirect lands on the USER's
+    // machine where nothing listens: the server never sees the callback and the modal would
+    // wait forever. Detect that and surface the paste path immediately instead.
+    setManualCallbackRequired(
+      needsManualCallbackPaste({
+        callbackUrl: startData.callbackUrl,
+        pageHostname: window.location.hostname,
+      }),
+    );
     if (!isOpenRef.current) {
       stopOwnedProxy();
       return;
@@ -798,9 +812,31 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
             {authMode === "browser" && (
               <>
                 {step === "waiting" && (
-                  <div className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg bg-sidebar/50">
-                    <span className="material-symbols-outlined text-base text-primary animate-spin">progress_activity</span>
-                    <span className="text-sm">Waiting for browser authorization…</span>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg bg-sidebar/50">
+                      <span className="material-symbols-outlined text-base text-primary animate-spin">progress_activity</span>
+                      <span className="text-sm">Waiting for browser authorization…</span>
+                    </div>
+                    {manualCallbackRequired && (
+                      <div className="space-y-3">
+                        <div className="px-3 py-2 rounded-lg bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 text-sm">
+                          This dashboard is not on the same machine as the gateway, so the redirect to
+                          the local callback address cannot reach it. Sign in, then copy the FULL URL
+                          from the address bar — the browser will show an error page, and that URL is
+                          the one to paste here.
+                        </div>
+                        <Input
+                          value={callbackUrl}
+                          onChange={(e) => setCallbackUrl(e.target.value)}
+                          placeholder="http://127.0.0.1:.../callback?..."
+                          className="font-mono text-xs"
+                        />
+                        <div className="flex gap-2">
+                          <Button onClick={handleManualSubmit} fullWidth disabled={!callbackUrl}>Connect</Button>
+                          <Button onClick={handleClose} variant="ghost" fullWidth>Cancel</Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 {step === "input" && (

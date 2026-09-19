@@ -143,6 +143,16 @@ export function decryptZedAccessToken(encryptedAccessToken, privateKeyVerifier) 
   const encrypted = Buffer.from(String(encryptedAccessToken), "base64url");
   const fail = (oaepError) => {
     const message = oaepError instanceof Error ? oaepError.message : String(oaepError);
+    // The raw OpenSSL text ("error:02000079:rsa routines::oaep decoding error") is accurate
+    // and useless: it only ever means this ciphertext was encrypted to a DIFFERENT attempt's
+    // public key, because each attempt mints a fresh RSA keypair and the private half lives
+    // only in that attempt's session. Say what to do instead of leaking library internals.
+    if (/oaep|rsa routines|error:0/i.test(message)) {
+      throw new Error(
+        "Failed to decrypt this Zed callback: the token was encrypted to a different RSA keypair, so it belongs to a superseded login attempt. " +
+          "Restart the flow and use the callback URL from the SAME attempt — do not click Try Again or reload between signing in and pasting it.",
+      );
+    }
     throw new Error(`Failed to decrypt Zed access token: ${message}`);
   };
   try {

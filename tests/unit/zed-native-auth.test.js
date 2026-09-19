@@ -81,6 +81,26 @@ describe("criterion 4 — RSA decrypt works", () => {
     );
   });
 
+  it("reports an undecryptable token as a superseded attempt, not raw OpenSSL noise", () => {
+    // Real support case: the user retried (or reloaded) mid-flow, so the browser was holding a
+    // callback URL encrypted to the PREVIOUS attempt's public key. The raw message was
+    // "error:02000079:rsa routines::oaep decoding error" — true, and useless to act on.
+    const firstAttempt = createZedNativeAuthData({}, { nativeAppPort: 1 });
+    const secondAttempt = createZedNativeAuthData({}, { nativeAppPort: 1 });
+    const encrypted = encryptForCallback(firstAttempt.publicKey, "token-from-the-first-attempt");
+
+    let thrown = null;
+    try {
+      decryptZedAccessToken(encrypted, secondAttempt.privateKeyVerifier);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeTruthy();
+    expect(thrown.message).toMatch(/restart/i);
+    expect(thrown.message).toMatch(/same attempt|superseded|different RSA keypair/i);
+    expect(thrown.message).not.toMatch(/oaep|rsa routines|error:0/i);
+  });
+
   it("rejects a missing verifier instead of silently failing", () => {
     const auth = createZedNativeAuthData({}, { nativeAppPort: 1 });
     const encrypted = encryptForCallback(auth.publicKey, "x");
