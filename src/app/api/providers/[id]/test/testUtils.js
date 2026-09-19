@@ -32,6 +32,11 @@ const PROBE_USER_AGENT = "9Router";
 // morph validates the `sk-…` shape and refuses a bare word with 401, so a shapeless token
 // would test the format check instead of the value check and report a false clean pass.
 const PROBE_INVALID_TOKEN = "sk-9router-invalid-key-probe-000";
+// A refusal that is about the plan, not the key. kilo-gateway answers 402 "Paid Model -
+// Credits Required" to a REAL key (measured), and a 403 can mean "this model is not in
+// your subscription" — none of those say the credential is wrong, so a chat probe that
+// fails this way must not be read as an invalid key.
+const PLAN_REFUSAL_PATTERN = /plan|subscri|upgrade|entitlement|not included|quota|credit|balance|insufficient/i;
 
 // OAuth provider test endpoints
 const OAUTH_TEST_CONFIG = {
@@ -590,6 +595,67 @@ async function fetchWithConnectionProxy(url, options = {}, effectiveProxy = null
     connectionProxyUrl: effectiveProxy.connectionProxyUrl,
     connectionNoProxy: effectiveProxy.connectionNoProxy || "",
   });
+}
+
+/**
+ * First usable model id out of a /models response body. The chat probe needs a model, and
+ * for these providers the only trustworthy source is the catalog we just fetched — the
+ * static map has no entry for sambanova, kilo-gateway or api-airforce (getDefaultModel
+ * returns null), and the connection row carries no model column either.
+ */
+function firstModelId(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed) ? parsed : parsed?.data || parsed?.models || [];
+    for (const m of Array.isArray(list) ? list : []) {
+      const id = typeof m === "string" ? m : m?.id || m?.name;
+      if (typeof id === "string" && id.trim()) return id.trim();
+    }
+  } catch {
+    // Not JSON — nothing to read a model id from.
+  }
+  return null;
+}
+
+/**
+ * Settle a credential with the provider's CHAT endpoint, for the cases where the models
+ * endpoint cannot answer for it: some serve /v1/models publicly (venice, sambanova,
+ * api-airforce, kilo-gateway) and morph accepts any key-shaped bearer. All of them refuse a
+ * garbage key on chat with 401/403 (measured live), so a one-token completion is the probe
+ * that actually inspects the key — and a 2xx completion cannot happen without a usable one.
+ *
+ * Never returns a hard failure it did not earn: a plan refusal (402, or a 403 that talks
+ * about the plan) and any answer that is not about the credential (404 model guess, 429,
+ * 5xx, network error) come back as a warning with the connection left usable.
+ */
+async function probeChatCredential(entry, connection, probeHeaders, effectiveProxy, reason, modelHint = null) {
+  const chatUrl = entry?.baseUrl;
+  const model = connection.defaultModel || modelHint || getDefaultModel(connection.provider);
+  if (!chatUrl || !connection.apiKey || !model) return { valid: true, warning: reason };
+
+  let res;
+  let body = "";
+  try {
+    res = await fetchWithConnectionProxy(chatUrl, {
+      method: "POST",
+      headers: { ...probeHeaders, Authorization: `Bearer ${connection.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, messages: [{ role: "user", content: "test" }], max_tokens: 1, stream: false }),
+    }, effectiveProxy);
+    body = await res.text().catch(() => "");
+  } catch (err) {
+    return { valid: true, warning: `${reason} The chat probe failed (${err.message}), so the key is still unverified.` };
+  }
+
+  if (res.ok) return { valid: true, error: null };
+  if (res.status === 401) return { valid: false, error: "Invalid API key" };
+  if (res.status === 402 || (res.status === 403 && PLAN_REFUSAL_PATTERN.test(body))) {
+    return {
+      valid: true,
+      warning: `Endpoint reachable and the API key was accepted, but the chat endpoint answered ${res.status} on plan or credit grounds — the model is not usable on this plan.`,
+    };
+  }
+  if (res.status === 403) return { valid: false, error: "Invalid API key" };
+  return { valid: true, warning: `${reason} The chat probe answered ${res.status}, so the key is still unverified.` };
 }
 
 async function testApiKeyConnection(connection, effectiveProxy = null) {
@@ -1167,12 +1233,11 @@ case "llm7": {
           // soft warning instead of a false pass when the list is open. The connection
           // still counts as reachable — we simply cannot vouch for the key from here.
           if (res.status === 200) {
+            const catalogModel = firstModelId(await res.text().catch(() => ""));
             const anon = await fetchWithConnectionProxy(validateUrl, { headers: { ...probeHeaders } }, effectiveProxy);
             if (anon.status === 200) {
-              return {
-                valid: true,
-                warning: "Endpoint reachable, but the provider serves its model list publicly — the API key could not be verified.",
-              };
+              return probeChatCredential(entry, connection, probeHeaders, effectiveProxy,
+                "Endpoint reachable, but the provider serves its model list publicly — the API key could not be verified.", catalogModel);
             }
             // A 401 without credentials proves the endpoint CAN check the header — but
             // only if it checks the value too. morph answers 200 to any bearer while
@@ -1185,35 +1250,28 @@ case "llm7": {
                 headers: { ...probeHeaders, Authorization: `Bearer ${PROBE_INVALID_TOKEN}` },
               }, effectiveProxy);
               if (bogus.status === 200) {
-                return {
-                  valid: true,
-                  warning: "Endpoint reachable, but it accepts any bearer token — the API key could not be verified.",
-                };
+                return probeChatCredential(entry, connection, probeHeaders, effectiveProxy,
+                  "Endpoint reachable, but it accepts any bearer token — the API key could not be verified.", catalogModel);
               }
               if (bogus.status === 401 || bogus.status === 403) {
                 // Both probes refused a credential the endpoint could not have accepted:
                 // this is the only outcome that actually establishes the key was checked.
                 return { valid: true, error: null };
               }
-              return {
-                valid: true,
-                warning: `Endpoint reachable, but the invalid-key probe answered ${bogus.status} — the API key could not be verified.`,
-              };
+              return probeChatCredential(entry, connection, probeHeaders, effectiveProxy,
+                `Endpoint reachable, but the invalid-key probe answered ${bogus.status} — the API key could not be verified.`);
             }
-            return {
-              valid: true,
-              warning: `Endpoint reachable, but the anonymous probe answered ${anon.status} — the API key could not be verified.`,
-            };
+            return probeChatCredential(entry, connection, probeHeaders, effectiveProxy,
+              `Endpoint reachable, but the anonymous probe answered ${anon.status} — the API key could not be verified.`);
           }
           // Anything else (429 rate limit, 5xx) proves the endpoint answered and did not
           // refuse the key — but it never examined it either. A clean pass would be a
           // guess dressed up as a verdict (baidu answers 403 to a garbage key yet 429
           // "Over rate limit" once the endpoint has been hit a few times), so say what
-          // could not be established instead.
-          return {
-            valid: true,
-            warning: `Endpoint reachable, but it answered ${res.status} without examining the key — the API key could not be verified.`,
-          };
+          // could not be established instead — and let the chat endpoint, which does
+          // check the credential, settle it when it can.
+          return probeChatCredential(entry, connection, probeHeaders, effectiveProxy,
+            `Endpoint reachable, but it answered ${res.status} without examining the key — the API key could not be verified.`);
         }
         return { valid: false, error: "Provider test not supported" };
       }

@@ -61,6 +61,15 @@ function lastUpdate() {
   return mocks.updateProviderConnection.mock.calls.at(-1)?.[1] || {};
 }
 
+const MODELS_CATALOG = JSON.stringify({ data: [{ id: "probe-model-1" }] });
+/** A keyed /models answer that carries a catalog, so the chat probe has a model to use. */
+function modelsOk() {
+  return { ok: true, status: 200, text: async () => MODELS_CATALOG, json: async () => ({ data: [{ id: "probe-model-1" }] }) };
+}
+function refuse(status, body) {
+  return { ok: false, status, text: async () => body, json: async () => ({}) };
+}
+
 describe("provider test — generic validateUrl fallback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -125,14 +134,17 @@ describe("provider test — generic validateUrl fallback", () => {
     // venice, sambanova, kilo-gateway and api-airforce all answer 200 to a garbage key,
     // so a plain 200 proves nothing about the credential. The second (anonymous) probe
     // is what distinguishes an authenticated list from an open one.
+    // The chat probe now follows, and here it cannot settle anything either (404 = our
+    // model guess, not a refused key), so the caveat must survive.
     let calls = 0;
-    global.fetch = vi.fn(async () => {
+    global.fetch = vi.fn(async (url) => {
       calls++;
-      return { ok: true, status: 200, text: async () => "{}", json: async () => ({ data: [] }) };
+      if (String(url).includes("/models")) return modelsOk();
+      return refuse(404, '{"error":"please check the model you provided"}');
     });
 
     const out = await testConnection("venice");
-    expect(calls).toBe(2);
+    expect(calls).toBe(3);
     expect(out.valid).toBe(true);
     // Stays active (reachable), but the caveat is recorded for the dashboard.
     expect(lastUpdate().testStatus).toBe("active");
@@ -241,8 +253,10 @@ describe("provider test — generic validateUrl fallback", () => {
     global.fetch = vi.fn(async (url, opts) => {
       const auth = opts?.headers?.["Authorization"] || "";
       seenTokens.push(auth);
-      if (!auth) return { ok: false, status: 401, text: async () => "no auth", json: async () => ({}) };
-      return { ok: true, status: 200, text: async () => "{}", json: async () => ({ data: [] }) };
+      // The chat probe cannot settle it either in this scenario, so the caveat must stay.
+      if (!String(url).includes("/models")) return refuse(429, "slow down");
+      if (!auth) return refuse(401, "no auth");
+      return modelsOk();
     });
 
     const out = await testConnection("morph");
@@ -255,7 +269,7 @@ describe("provider test — generic validateUrl fallback", () => {
     // check instead of the value check and hand back a false clean pass (measured).
     expect(bogus).toMatch(/^Bearer sk-/);
     expect(lastUpdate().testStatus).toBe("active");
-    expect(lastUpdate().lastError).toMatch(/could not be verified|not verified/i);
+    expect(lastUpdate().lastError).toMatch(/could not be verified|not verified|unverified/i);
   });
 
   it("records a rate-limited probe as unverified instead of a clean pass", async () => {
@@ -296,16 +310,142 @@ describe("provider test — generic validateUrl fallback", () => {
     // as far as the header and no further, so the pass stays qualified.
     global.fetch = vi.fn(async (url, opts) => {
       const auth = opts?.headers?.["Authorization"] || "";
-      if (auth.includes("sk-test-key")) {
-        return { ok: true, status: 200, text: async () => "{}", json: async () => ({ data: [] }) };
-      }
-      if (auth) return { ok: false, status: 429, text: async () => "slow down", json: async () => ({}) };
-      return { ok: false, status: 401, text: async () => "no auth", json: async () => ({}) };
+      if (!String(url).includes("/models")) return refuse(429, "slow down");
+      if (auth.includes("sk-test-key")) return { ok: true, status: 200, text: async () => "{}", json: async () => ({ data: [] }) };
+      return auth ? refuse(429, "slow down") : refuse(401, "no auth");
     });
 
     const out = await testConnection("poolside");
     expect(out.valid).toBe(true);
     expect(lastUpdate().lastError).toMatch(/429|could not be verified/i);
+  });
+
+  it("refuses a key the models list could not check, using the chat endpoint", async () => {
+    // venice, api-airforce, sambanova and kilo-gateway serve /v1/models publicly, so the
+    // models probe cannot answer for the credential — and an invalid key showed up as a
+    // green "reachable" instead of a failure. Their chat endpoint does authenticate
+    // (measured: garbage key -> 401 on all of them), so that is where the verdict comes from.
+    const urls = [];
+    global.fetch = vi.fn(async (url, opts) => {
+      urls.push(String(url));
+      if (String(url).includes("/models")) return modelsOk();
+      return { ok: false, status: 401, text: async () => JSON.stringify({ error: { message: "Authentication failed" } }), json: async () => ({}) };
+    });
+
+    const out = await testConnection("venice");
+    expect(urls.some((u) => u.includes("chat/completions"))).toBe(true);
+    expect(out.valid).toBe(false);
+    expect(out.error).toMatch(/invalid api key/i);
+    expect(lastUpdate().testStatus).toBe("error");
+  });
+
+  it("passes a key the chat endpoint accepted", async () => {
+    global.fetch = vi.fn(async (url, opts) => {
+      if (String(url).includes("/models")) return modelsOk();
+      // A completion only completes with a working credential.
+      return { ok: true, status: 200, text: async () => JSON.stringify({ choices: [] }), json: async () => ({ choices: [] }) };
+    });
+
+    const out = await testConnection("sambanova");
+    expect(out.valid).toBe(true);
+    expect(lastUpdate().lastError).toBeNull();
+  });
+
+  it("refuses a key that only morphed into looking like one", async () => {
+    // morph accepts any key-shaped bearer on /models, so the third probe exposes it as
+    // unverifiable — then the chat endpoint settles it.
+    const seen = [];
+    global.fetch = vi.fn(async (url, opts) => {
+      const auth = opts?.headers?.["Authorization"] || "";
+      seen.push({ url: String(url), auth });
+      if (String(url).includes("/models")) {
+        return auth
+          ? { ok: true, status: 200, text: async () => "{}", json: async () => ({ data: [] }) }
+          : { ok: false, status: 401, text: async () => "no auth", json: async () => ({}) };
+      }
+      // The connection holds an invented key: /models takes it, chat refuses it.
+      return refuse(401, JSON.stringify({ detail: "Invalid or disabled API key" }));
+    });
+
+    const out = await testConnection("morph");
+    expect(seen.some((s) => s.url.includes("chat/completions") && s.auth.includes("sk-test-key"))).toBe(true);
+    expect(out.valid).toBe(false);
+    expect(out.error).toMatch(/invalid api key/i);
+  });
+
+  it("keeps a valid key usable when the plan, not the key, is the problem", async () => {
+    // kilo-gateway answers 402 "Paid Model - Credits Required" to a REAL key (measured), and
+    // a plan refusal is not a credential failure — report the limit, not a bad key.
+    global.fetch = vi.fn(async (url, opts) => {
+      if (String(url).includes("/models")) return modelsOk();
+      return { ok: false, status: 402, text: async () => JSON.stringify({ error: { title: "Paid Model - Credits Required" } }), json: async () => ({}) };
+    });
+
+    const out = await testConnection("kilo-gateway");
+    expect(out.valid).toBe(true);
+    expect(lastUpdate().testStatus).toBe("active");
+    expect(lastUpdate().lastError).toMatch(/credit|quota|plan|402/i);
+  });
+
+  it("does not read a plan refusal on 403 as a bad key", async () => {
+    global.fetch = vi.fn(async (url, opts) => {
+      if (String(url).includes("/models")) return modelsOk();
+      return { ok: false, status: 403, text: async () => JSON.stringify({ error: { message: "This model is not included in your current subscription plan" } }), json: async () => ({}) };
+    });
+
+    const out = await testConnection("api-airforce");
+    expect(out.valid).toBe(true);
+    expect(lastUpdate().lastError).toMatch(/plan|subscription|limit/i);
+  });
+
+  it("still refuses a 403 that blames the credential", async () => {
+    global.fetch = vi.fn(async (url, opts) => {
+      if (String(url).includes("/models")) return modelsOk();
+      return { ok: false, status: 403, text: async () => JSON.stringify({ error: "please check the api-key you provided" }), json: async () => ({}) };
+    });
+
+    const out = await testConnection("api-airforce");
+    expect(out.valid).toBe(false);
+    expect(out.error).toMatch(/invalid api key/i);
+  });
+
+  it("does not fail a key over a chat probe that never got an answer", async () => {
+    // A 404 there means our model guess was wrong, not that the key is bad.
+    global.fetch = vi.fn(async (url, opts) => {
+      if (String(url).includes("/models")) return modelsOk();
+      return { ok: false, status: 404, text: async () => JSON.stringify({ error: "please check the model you provided" }), json: async () => ({}) };
+    });
+
+    const out = await testConnection("poolside");
+    expect(out.valid).toBe(true);
+    expect(lastUpdate().lastError).toMatch(/could not be verified|unverified/i);
+  });
+
+  it("upgrades a rate-limited models probe when the chat probe passes", async () => {
+    // baidu answers 429 to /v1/models when hammered; the chat endpoint still answers.
+    global.fetch = vi.fn(async (url, opts) => {
+      if (String(url).includes("/models")) {
+        return { ok: false, status: 429, text: async () => "slow down", json: async () => ({}) };
+      }
+      return { ok: true, status: 200, text: async () => "{}", json: async () => ({}) };
+    });
+
+    // venice: the models probe is hammered, the chat endpoint is not.
+    const out = await testConnection("venice");
+    expect(out.valid).toBe(true);
+    expect(lastUpdate().lastError).toBeNull();
+  });
+
+  it("does not spend a chat probe when the models endpoint already ruled", async () => {
+    const urls = [];
+    global.fetch = vi.fn(async (url) => {
+      urls.push(String(url));
+      return { ok: false, status: 401, text: async () => "nope", json: async () => ({}) };
+    });
+
+    const out = await testConnection("bluesminds");
+    expect(out.valid).toBe(false);
+    expect(urls.filter((u) => u.includes("chat/completions"))).toHaveLength(0);
   });
 
   it("keeps the bespoke case for providers that have one", async () => {
