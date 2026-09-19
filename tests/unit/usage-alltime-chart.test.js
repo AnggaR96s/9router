@@ -33,7 +33,9 @@ const CHART_ROUTE = "src/app/api/usage/chart/route.js";
 const PAGE = "src/app/(dashboard)/dashboard/usage/page.js";
 const STATS_COMPONENT = "src/shared/components/UsageStats.js";
 
-const DB = path.join(os.homedir(), ".9router/db/data.sqlite");
+// The suite runs against a throwaway copy of the live data dir (see tests/vitest.config.js),
+// so read the same file the app reads instead of reaching for ~/.9router unconditionally.
+const DB = path.join(process.env.DATA_DIR || path.join(os.homedir(), ".9router"), "db", "data.sqlite");
 const hasLiveDb = fs.existsSync(DB);
 
 /** Read usageDaily straight from SQLite, read-only, independent of the app's own repo layer. */

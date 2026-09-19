@@ -1,17 +1,32 @@
 import { defineConfig } from "vitest/config";
 import { resolve } from "path";
 import { fileURLToPath } from "url";
-import { mkdtempSync } from "fs";
-import { tmpdir } from "os";
+import { mkdtempSync, mkdirSync, copyFileSync, existsSync } from "fs";
+import { tmpdir, homedir } from "os";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 // Suites such as unit/zed-native-auth.test.js and unit/kimchi.test.js persist real
 // connections through the app's DB layer instead of mocking it. Pointed at the default
 // data dir those land in the live ~/.9router/db/data.sqlite as junk provider connections
-// (they show up active in the dashboard and get picked for rotation). Give every run its
-// own throwaway data dir so the suite can never touch live state.
+// (they show up active in the dashboard and get picked for rotation).
+//
+// So every run gets its own data dir. It is SEEDED WITH A COPY of the live database rather
+// than left empty: other suites read real rows on purpose (usage-alltime-chart sums the
+// usageDaily table, system-status-telemetry asserts the collector's counts match the real
+// schema). An empty dir turns those into false failures, while a copy keeps their intent —
+// real schema, real data, real SQL — and confines every write to the throwaway dir.
 const testDataDir = mkdtempSync(resolve(tmpdir(), "9router-tests-"));
+const liveDb = resolve(homedir(), ".9router/db/data.sqlite");
+if (existsSync(liveDb)) {
+  const dbDir = resolve(testDataDir, "db");
+  mkdirSync(dbDir, { recursive: true });
+  // WAL mode: the -wal/-shm siblings carry rows not yet checkpointed into the main file.
+  for (const suffix of ["", "-wal", "-shm"]) {
+    const src = `${liveDb}${suffix}`;
+    if (existsSync(src)) copyFileSync(src, resolve(dbDir, `data.sqlite${suffix}`));
+  }
+}
 
 export default defineConfig({
   test: {
