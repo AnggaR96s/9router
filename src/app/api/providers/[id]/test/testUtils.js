@@ -1180,17 +1180,40 @@ case "llm7": {
             // alone reads an invented key as valid. Ask once more with a token that is
             // deliberately not the key: if that is accepted as well, no /models probe
             // can vouch for this credential.
-            const bogus = await fetchWithConnectionProxy(validateUrl, {
-              headers: { ...probeHeaders, Authorization: `Bearer ${PROBE_INVALID_TOKEN}` },
-            }, effectiveProxy);
-            if (bogus.status === 200) {
+            if (anon.status === 401 || anon.status === 403) {
+              const bogus = await fetchWithConnectionProxy(validateUrl, {
+                headers: { ...probeHeaders, Authorization: `Bearer ${PROBE_INVALID_TOKEN}` },
+              }, effectiveProxy);
+              if (bogus.status === 200) {
+                return {
+                  valid: true,
+                  warning: "Endpoint reachable, but it accepts any bearer token — the API key could not be verified.",
+                };
+              }
+              if (bogus.status === 401 || bogus.status === 403) {
+                // Both probes refused a credential the endpoint could not have accepted:
+                // this is the only outcome that actually establishes the key was checked.
+                return { valid: true, error: null };
+              }
               return {
                 valid: true,
-                warning: "Endpoint reachable, but it accepts any bearer token — the API key could not be verified.",
+                warning: `Endpoint reachable, but the invalid-key probe answered ${bogus.status} — the API key could not be verified.`,
               };
             }
+            return {
+              valid: true,
+              warning: `Endpoint reachable, but the anonymous probe answered ${anon.status} — the API key could not be verified.`,
+            };
           }
-          return { valid: true, error: null };
+          // Anything else (429 rate limit, 5xx) proves the endpoint answered and did not
+          // refuse the key — but it never examined it either. A clean pass would be a
+          // guess dressed up as a verdict (baidu answers 403 to a garbage key yet 429
+          // "Over rate limit" once the endpoint has been hit a few times), so say what
+          // could not be established instead.
+          return {
+            valid: true,
+            warning: `Endpoint reachable, but it answered ${res.status} without examining the key — the API key could not be verified.`,
+          };
         }
         return { valid: false, error: "Provider test not supported" };
       }

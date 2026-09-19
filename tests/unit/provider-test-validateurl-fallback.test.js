@@ -116,6 +116,9 @@ describe("provider test — generic validateUrl fallback", () => {
 
     const out = await testConnection("bluesminds");
     expect(out.valid).toBe(true);
+    // Reachable, but the 429 means the key was never examined: record the caveat rather
+    // than reporting a verification the probe did not perform.
+    expect(lastUpdate().lastError).toMatch(/429|could not be verified/i);
   });
 
   it("warns instead of passing cleanly when the provider serves models publicly", async () => {
@@ -253,6 +256,56 @@ describe("provider test — generic validateUrl fallback", () => {
     expect(bogus).toMatch(/^Bearer sk-/);
     expect(lastUpdate().testStatus).toBe("active");
     expect(lastUpdate().lastError).toMatch(/could not be verified|not verified/i);
+  });
+
+  it("records a rate-limited probe as unverified instead of a clean pass", async () => {
+    // baidu answers 403 to a garbage key, but 429 "Over rate limit" when the endpoint has
+    // been hit a few times — and a 429 used to fall straight through to `{valid:true,
+    // error:null}`. That is a clean pass for a key the endpoint never looked at, i.e. the
+    // same false green the other branches guard against. Reachable is still true; the
+    // verdict has to say what it could not establish.
+    global.fetch = vi.fn(async () => ({
+      ok: false, status: 429, text: async () => "{\"code\":\"OverRateLimit\"}", json: async () => ({}),
+    }));
+
+    const out = await testConnection("baidu");
+    expect(out.valid).toBe(true);
+    expect(lastUpdate().testStatus).toBe("active");
+    expect(lastUpdate().lastError).toMatch(/429|rate|unverified|could not be verified/i);
+  });
+
+  it("does not call it verified when the anonymous probe is inconclusive", async () => {
+    // Keyed 200 followed by an anonymous 429 proves nothing about the value: the endpoint
+    // never got far enough to answer. Reporting a clean pass here would be a guess.
+    global.fetch = vi.fn(async (url, opts) => {
+      const auth = opts?.headers?.["Authorization"] || "";
+      if (auth.includes("sk-test-key")) {
+        return { ok: true, status: 200, text: async () => "{}", json: async () => ({ data: [] }) };
+      }
+      return { ok: false, status: 429, text: async () => "slow down", json: async () => ({}) };
+    });
+
+    const out = await testConnection("sambanova");
+    expect(out.valid).toBe(true);
+    expect(lastUpdate().lastError).toMatch(/429|rate|unverified|could not be verified/i);
+  });
+
+  it("does not call it verified when the invalid-key probe is inconclusive", async () => {
+    // Keyed 200 + anonymously refused gets us close, but the third probe has to actually
+    // answer 401/403 for the value to count as checked. A 429 there means the endpoint got
+    // as far as the header and no further, so the pass stays qualified.
+    global.fetch = vi.fn(async (url, opts) => {
+      const auth = opts?.headers?.["Authorization"] || "";
+      if (auth.includes("sk-test-key")) {
+        return { ok: true, status: 200, text: async () => "{}", json: async () => ({ data: [] }) };
+      }
+      if (auth) return { ok: false, status: 429, text: async () => "slow down", json: async () => ({}) };
+      return { ok: false, status: 401, text: async () => "no auth", json: async () => ({}) };
+    });
+
+    const out = await testConnection("poolside");
+    expect(out.valid).toBe(true);
+    expect(lastUpdate().lastError).toMatch(/429|could not be verified/i);
   });
 
   it("keeps the bespoke case for providers that have one", async () => {
