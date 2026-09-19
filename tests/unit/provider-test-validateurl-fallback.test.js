@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { PROVIDERS } from "open-sse/config/providers.js";
 
 // testApiKeyConnection is not exported, so drive it through testSingleConnection and
 // mock the DB + proxy layers it reaches for. The point of these cases is the generic
@@ -172,6 +173,86 @@ describe("provider test — generic validateUrl fallback", () => {
     const out = await testConnection("elevenlabs");
     expect(out.valid).toBe(false);
     expect(out.error).toBe("Provider test not supported");
+  });
+
+  it("sends a User-Agent that WAFs do not blanket-block", async () => {
+    // Node's fetch (undici) sends `User-Agent: node`, and Cloudflare-fronted providers
+    // answer it with 404 "Gone." BEFORE looking at the credential — measured on
+    // featherless: UA=node/undici -> 404 (key or no key), any other UA -> 401/200.
+    // A probe that inherits that default reports "Models endpoint not found" for a
+    // perfectly good key, so every probe must carry an explicit UA.
+    const seen = [];
+    global.fetch = vi.fn(async (url, opts) => {
+      seen.push(opts?.headers || {});
+      return { ok: true, status: 200, text: async () => "{}", json: async () => ({ data: [] }) };
+    });
+
+    await testConnection("poolside");
+    expect(seen.length).toBeGreaterThan(0);
+    for (const headers of seen) {
+      const ua = headers["User-Agent"] || headers["user-agent"];
+      expect(ua, `probe headers were ${JSON.stringify(headers)}`).toBeTruthy();
+      expect(String(ua)).not.toMatch(/^(node|undici)$/i);
+    }
+  });
+
+  it("reuses the registry's declared fingerprint headers on the probe", async () => {
+    // The registry is the single source of truth for how traffic must look, so the probe
+    // has to carry the same product headers the inference path sends — otherwise a test
+    // can fail where real traffic succeeds. api-airforce declares HTTP-Referer/X-Title
+    // (the OpenRouter-style pair upstreams gate on) and has no bespoke case.
+    const declared = PROVIDERS["api-airforce"].headers || {};
+    expect(Object.keys(declared).length, "api-airforce must declare headers").toBeGreaterThan(0);
+
+    const seen = [];
+    global.fetch = vi.fn(async (url, opts) => {
+      seen.push(opts?.headers || {});
+      return { ok: true, status: 200, text: async () => "{}", json: async () => ({ data: [] }) };
+    });
+
+    await testConnection("api-airforce");
+    for (const [name, value] of Object.entries(declared)) {
+      expect(seen[0][name], `probe dropped the declared header ${name}`).toBe(value);
+    }
+  });
+
+  it("uses a User-Agent the upstream will not blanket-block", async () => {
+    // Same trap as above, from the other side: the registry fingerprint must never be
+    // just `node`/`undici`, because that is exactly what gets refused before auth.
+    const seen = [];
+    global.fetch = vi.fn(async (url, opts) => {
+      seen.push(opts?.headers || {});
+      return { ok: true, status: 200, text: async () => "{}", json: async () => ({ data: [] }) };
+    });
+
+    await testConnection("featherless");
+    expect(seen[0]["User-Agent"]).toBeTruthy();
+    expect(String(seen[0]["User-Agent"])).not.toMatch(/^(node|undici)$/i);
+  });
+
+  it("does not pass cleanly when the endpoint accepts any bearer token", async () => {
+    // morph answers 200 to a garbage bearer but 401 to no Authorization header at all,
+    // so the anonymous probe cannot tell a valid key from an invented one. The third
+    // probe (deliberately invalid token) is what exposes it.
+    const seenTokens = [];
+    global.fetch = vi.fn(async (url, opts) => {
+      const auth = opts?.headers?.["Authorization"] || "";
+      seenTokens.push(auth);
+      if (!auth) return { ok: false, status: 401, text: async () => "no auth", json: async () => ({}) };
+      return { ok: true, status: 200, text: async () => "{}", json: async () => ({ data: [] }) };
+    });
+
+    const out = await testConnection("morph");
+    expect(out.valid).toBe(true);
+    // The invented token must be obviously not-the-key, or the verdict is meaningless.
+    const bogus = seenTokens.find((t) => t && !t.includes("sk-test-key"));
+    expect(bogus).toBeTruthy();
+    // ...and it has to be KEY-SHAPED. morph checks the `sk-…` prefix and refuses a bare
+    // word with 401 whatever it says, so a shapeless sentinel would exercise the format
+    // check instead of the value check and hand back a false clean pass (measured).
+    expect(bogus).toMatch(/^Bearer sk-/);
+    expect(lastUpdate().testStatus).toBe("active");
+    expect(lastUpdate().lastError).toMatch(/could not be verified|not verified/i);
   });
 
   it("keeps the bespoke case for providers that have one", async () => {

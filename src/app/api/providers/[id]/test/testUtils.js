@@ -23,6 +23,16 @@ import {
 import { buildClineHeaders } from "@/shared/utils/clineAuth";
 import { buildZedUserAuthHeader, ZED_HEADERS } from "open-sse/shared/zedAuth.js";
 
+// Identity for the generic /models probe: an explicit User-Agent, because leaving it to
+// the runtime default (undici sends `User-Agent: node`) gets a bare 404 from
+// Cloudflare-fronted providers before they ever look at the key.
+const PROBE_USER_AGENT = "9Router";
+// Sentinel bearer for the "does this endpoint check the key at all" probe. Obviously not
+// a credential, so it can never collide with a real one — but deliberately KEY-SHAPED:
+// morph validates the `sk-…` shape and refuses a bare word with 401, so a shapeless token
+// would test the format check instead of the value check and report a false clean pass.
+const PROBE_INVALID_TOKEN = "sk-9router-invalid-key-probe-000";
+
 // OAuth provider test endpoints
 const OAUTH_TEST_CONFIG = {
   claude: { checkExpiry: true, refreshable: true },
@@ -1123,10 +1133,21 @@ case "llm7": {
         // Providers with no validateUrl (audio/image/search/embedding vendors, whose
         // APIs are not GET /models-shaped) still fall through to the explicit error —
         // a wrong probe would report a working key as broken.
-        const validateUrl = PROVIDERS[connection.provider]?.validateUrl;
+        const entry = PROVIDERS[connection.provider];
+        const validateUrl = entry?.validateUrl;
         if (validateUrl) {
+          // The probe has to look like the traffic the gateway actually sends: the
+          // registry's static fingerprint (anti-ban headers) travels with it, plus a
+          // User-Agent that is never left to the runtime default. Cloudflare-fronted
+          // providers reject undici's `User-Agent: node` with 404 before authenticating,
+          // which used to surface as "Models endpoint not found" for a good key.
+          const fingerprint = entry.headers || {};
+          const probeHeaders = Object.keys(fingerprint).some((h) => h.toLowerCase() === "user-agent")
+            ? { ...fingerprint }
+            : { ...fingerprint, "User-Agent": PROBE_USER_AGENT };
+
           const res = await fetchWithConnectionProxy(validateUrl, {
-            headers: { Authorization: `Bearer ${connection.apiKey}` },
+            headers: { ...probeHeaders, Authorization: `Bearer ${connection.apiKey}` },
           }, effectiveProxy);
           // 401/403 mean the key was refused; 404 means the configured URL is wrong
           // rather than the key. Only those three count as a failure — a 200 is the
@@ -1146,11 +1167,26 @@ case "llm7": {
           // soft warning instead of a false pass when the list is open. The connection
           // still counts as reachable — we simply cannot vouch for the key from here.
           if (res.status === 200) {
-            const anon = await fetchWithConnectionProxy(validateUrl, {}, effectiveProxy);
+            const anon = await fetchWithConnectionProxy(validateUrl, { headers: { ...probeHeaders } }, effectiveProxy);
             if (anon.status === 200) {
               return {
                 valid: true,
                 warning: "Endpoint reachable, but the provider serves its model list publicly — the API key could not be verified.",
+              };
+            }
+            // A 401 without credentials proves the endpoint CAN check the header — but
+            // only if it checks the value too. morph answers 200 to any bearer while
+            // refusing a request with no Authorization at all, so the anonymous probe
+            // alone reads an invented key as valid. Ask once more with a token that is
+            // deliberately not the key: if that is accepted as well, no /models probe
+            // can vouch for this credential.
+            const bogus = await fetchWithConnectionProxy(validateUrl, {
+              headers: { ...probeHeaders, Authorization: `Bearer ${PROBE_INVALID_TOKEN}` },
+            }, effectiveProxy);
+            if (bogus.status === 200) {
+              return {
+                valid: true,
+                warning: "Endpoint reachable, but it accepts any bearer token — the API key could not be verified.",
               };
             }
           }
