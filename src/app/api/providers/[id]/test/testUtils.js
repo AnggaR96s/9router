@@ -18,8 +18,10 @@ import {
   CLINE_CONFIG,
   KILOCODE_CONFIG,
   KIMCHI_CONFIG,
+  ZED_HOSTED_CONFIG,
 } from "@/lib/oauth/constants/oauth";
 import { buildClineHeaders } from "@/shared/utils/clineAuth";
+import { buildZedUserAuthHeader, ZED_HEADERS } from "open-sse/shared/zedAuth.js";
 
 // OAuth provider test endpoints
 const OAUTH_TEST_CONFIG = {
@@ -78,6 +80,12 @@ const OAUTH_TEST_CONFIG = {
   kimi: { checkExpiry: true, refreshable: true },
   "kimi-coding": { checkExpiry: true, refreshable: true },
   cursor: { tokenExists: true },
+  zed: {
+    // Zed mints no refresh token, so there is nothing to refresh: probe the credential itself.
+    // The verdict comes from /client/users/me (see the branch below), never from the model
+    // catalog — a valid account with no subscription answers /models with an empty list.
+    refreshable: false,
+  },
   kilocode: {
     url: `${KILOCODE_CONFIG.apiBaseUrl}/api/profile`,
     method: "GET",
@@ -438,6 +446,35 @@ async function testOAuthConnection(connection, effectiveProxy = null) {
     }
 
     return { valid: false, error: initial.error, refreshed };
+  }
+
+  if (connection.provider === "zed") {
+    // Zed's auth is non-standard: "Authorization: <userId> <accessToken>" (no scheme) plus a
+    // duplicate x-zed-system-id, and the credential carries no refresh token. Probe the account
+    // endpoint the executor itself uses — that is what reads the token. The model catalog is
+    // deliberately NOT consulted: an account without a subscription answers /models 200 with
+    // {"models":[]} (measured live), so a valid credential would be reported as broken for
+    // lacking entitlements.
+    const headers = { Accept: "application/json", Authorization: buildZedUserAuthHeader(connection) };
+    const systemId = connection.providerSpecificData?.systemId;
+    if (systemId) headers[ZED_HEADERS.systemId] = systemId;
+
+    try {
+      const res = await fetchWithConnectionProxy(
+        `${ZED_HOSTED_CONFIG.cloudBaseUrl}/client/users/me`,
+        { method: "GET", headers },
+        effectiveProxy,
+      );
+      if (res.status === 401 || res.status === 403) {
+        return { valid: false, error: "Token invalid or revoked", refreshed: false };
+      }
+      if (!res.ok) {
+        return { valid: false, error: `API returned ${res.status}`, refreshed: false };
+      }
+      return { valid: true, error: null, refreshed: false, newTokens: null };
+    } catch (err) {
+      return { valid: false, error: err.message, refreshed: false };
+    }
   }
 
   if (connection.provider === "cline") {
